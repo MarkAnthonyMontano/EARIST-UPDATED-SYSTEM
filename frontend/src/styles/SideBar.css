@@ -1,0 +1,11 @@
+/* @import "tailwindcss"; */
+.button-hover:hover{
+    color: white;
+    background-color: maroon;
+    transition: 0.3s;
+}
+
+.button-hover:focus{
+    color: white;
+    background-color: maroon;
+}
