@@ -87,6 +87,7 @@ import ProctorApplicantList from './components/ProctorApplicantList';
 import ApplicantScoring from './components/ApplicantScoring';
 import Interview from './components/Interview';
 import QualifyingExam from './components/QualifyingExam';
+import QualifyingExamScore from './components/QualifyingExamScore';
 import CollegeApproval from './components/CollegeApproval';
 import MedicalClearance from './components/MedicalClearance';
 
@@ -104,8 +105,7 @@ import AdmissionServices from './components/AdmissionServices';
 import OfficeOfTheRegistrar from './components/OfficeOfTheRegistrar';
 
 import LoginEnrollment from './components/LoginEnrollment';
-import ExamScheduler from './components/ExamScheduler';
-import ExamScheduler2 from './components/ExamScheduler2';
+
 
 import ClassList from './components/ClassList';
 import ClassRoster from './components/ClassRoster';
@@ -135,6 +135,9 @@ function App() {
       fontFamily: "Poppins, sans-serif",
     },
   });
+
+  const keys = JSON.parse(localStorage.getItem("dashboardKeys") || "{}");
+
 
   return (
     <ThemeProvider theme={theme}>
@@ -230,6 +233,7 @@ function App() {
               <Route path="/medical_clearance" element={<ProtectedRoute><MedicalClearance /></ProtectedRoute>} />
               <Route path="/interview" element={<ProtectedRoute><Interview /></ProtectedRoute>} />
               <Route path="/qualifying_exam" element={<ProtectedRoute><QualifyingExam /></ProtectedRoute>} />
+              <Route path="/qualifying_exam_scores" element={<ProtectedRoute><QualifyingExamScore /></ProtectedRoute>} />
               <Route path="/college_approval" element={<ProtectedRoute><CollegeApproval /></ProtectedRoute>} />
 
 
@@ -247,13 +251,75 @@ function App() {
               <Route path="/super_admin_dashboard4" element={<ProtectedRoute><SuperAdminDashboard4 /></ProtectedRoute>} />
               <Route path="/super_admin_dashboard5" element={<ProtectedRoute><SuperAdminDashboard5 /></ProtectedRoute>} />
 
+              <Route
+                path="/applicant_dashboard"
+                element={
+                  <ProtectedRoute allowedRoles={['applicant']}>
+                    <ApplicantDashboard />
+                  </ProtectedRoute>
+                }
+              />
 
-              <Route path="/dashboard1" element={<ProtectedRoute allowedRoles={['applicant']}><Dashboard1 /></ProtectedRoute>} />
-              <Route path="/dashboard2" element={<ProtectedRoute allowedRoles={['applicant']}><Dashboard2 /></ProtectedRoute>} />
-              <Route path="/dashboard3" element={<ProtectedRoute allowedRoles={['applicant']}><Dashboard3 /></ProtectedRoute>} />
-              <Route path="/dashboard4" element={<ProtectedRoute allowedRoles={['applicant']}><Dashboard4 /></ProtectedRoute>} />
-              <Route path="/dashboard5" element={<ProtectedRoute allowedRoles={['applicant']}><Dashboard5 /></ProtectedRoute>} />
-              <Route path="/requirements_uploader" element={<ProtectedRoute allowedRoles={['applicant']}><RequirementUploader /></ProtectedRoute>} />
+              {keys.step1 && (
+                <Route
+                  path={`/dashboard/${keys.step1}`}
+                  element={
+                    <ProtectedRoute allowedRoles={['applicant']}>
+                      <Dashboard1 />
+                    </ProtectedRoute>
+                  }
+                />
+              )}
+              {keys.step2 && (
+                <Route
+                  path={`/dashboard/${keys.step2}`}
+                  element={
+                    <ProtectedRoute allowedRoles={['applicant']}>
+                      <Dashboard2 />
+                    </ProtectedRoute>
+                  }
+                />
+              )}
+              {keys.step3 && (
+                <Route
+                  path={`/dashboard/${keys.step3}`}
+                  element={
+                    <ProtectedRoute allowedRoles={['applicant']}>
+                      <Dashboard3 />
+                    </ProtectedRoute>
+                  }
+                />
+              )}
+              {keys.step4 && (
+                <Route
+                  path={`/dashboard/${keys.step4}`}
+                  element={
+                    <ProtectedRoute allowedRoles={['applicant']}>
+                      <Dashboard4 />
+                    </ProtectedRoute>
+                  }
+                />
+              )}
+              {keys.step5 && (
+                <Route
+                  path={`/dashboard/${keys.step5}`}
+                  element={
+                    <ProtectedRoute allowedRoles={['applicant']}>
+                      <Dashboard5 />
+                    </ProtectedRoute>
+                  }
+                />
+              )}
+
+              <Route
+                path="/requirements_uploader"
+                element={
+                  <ProtectedRoute allowedRoles={["applicant"]}>
+                    <RequirementUploader />
+                  </ProtectedRoute>
+                }
+              />
+
               <Route path="/student_requirements" element={<ProtectedRoute ><StudentRequirements /></ProtectedRoute>} />
 
 
@@ -309,8 +375,7 @@ function App() {
               <Route path="/class_list/css/:curriculum_id/:dstID/:courseID/:professorID" element={<ProtectedRoute><StudentList /></ProtectedRoute>} />
 
 
-              <Route path="/add_exam_schedule" element={<ProtectedRoute><ExamScheduler /></ProtectedRoute>} />
-              <Route path="/assigning_schedule" element={<ProtectedRoute><ExamScheduler2 /></ProtectedRoute>} />
+        
             </Routes>
           </main>
         </div>

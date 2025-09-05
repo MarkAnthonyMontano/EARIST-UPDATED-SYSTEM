@@ -35,11 +35,10 @@ const AdminDashboard1 = () => {
     { label: "Applicant List", to: "/applicant_list", icon: <ListAltIcon /> },
     { label: "Applicant Form", to: "/admin_dashboard1", icon: <PersonIcon /> },
     { label: "Documents Submitted", to: "/student_requirements", icon: <DescriptionIcon /> },
-    { label: "Interview", to: "/interview", icon: <RecordVoiceOverIcon /> },
-    { label: "Qualifying Exam", to: "/qualifying_exam", icon: <SchoolIcon /> },
+    { label: "Interview / Qualifiying Exam", to: "/interview", icon: <SchoolIcon /> },
     { label: "College Approval", to: "/college_approval", icon: <CheckCircleIcon /> },
     { label: "Medical Clearance", to: "/medical_clearance", icon: <LocalHospitalIcon /> },
-    { label: "Applicant Status", to: "/applicant_status", icon: <HowToRegIcon /> },
+    { label: "Student Numbering", to: "/student_numbering", icon: <HowToRegIcon /> },
   ];
 
   const navigate = useNavigate();
@@ -730,7 +729,7 @@ const AdminDashboard1 = () => {
                 justifyContent: "center",
                 cursor: "pointer",
                 borderRadius: 2,
-             border: "2px solid #6D2323",
+                border: "2px solid #6D2323",
 
                 backgroundColor: currentStep === index ? "#6D2323" : "#E8C999",
                 color: currentStep === index ? "#fff" : "#000",

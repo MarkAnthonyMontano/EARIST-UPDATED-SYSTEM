@@ -33,6 +33,9 @@ const Dashboard2 = (props) => {
     const storedUser = localStorage.getItem("email");
     const storedRole = localStorage.getItem("role");
     const storedID = localStorage.getItem("person_id");
+    const keys = JSON.parse(localStorage.getItem("dashboardKeys") || "{}");
+    navigate(`/dashboard/${keys.step2}`);
+
 
     const overrideId = props?.adminOverridePersonId; // new
 
@@ -59,31 +62,32 @@ const Dashboard2 = (props) => {
     }
   }, []);
 
-  
-  
-    const steps = [
-      { label: "Personal Information", icon: <PersonIcon />, path: "/dashboard1" },
-      { label: "Family Background", icon: <FamilyRestroomIcon />, path: "/dashboard2" },
-      { label: "Educational Attainment", icon: <SchoolIcon />, path: "/dashboard3" },
-      { label: "Health Medical Records", icon: <HealthAndSafetyIcon />, path: "/dashboard4" },
-      { label: "Other Information", icon: <InfoIcon />, path: "/dashboard5" },
-    ];
-  
-  
-    const [activeStep, setActiveStep] = useState(1);
-    const [clickedSteps, setClickedSteps] = useState(Array(steps.length).fill(false));
-  
-    const handleStepClick = (index) => {
-      if (isFormValid()) {
-        setActiveStep(index);
-        const newClickedSteps = [...clickedSteps];
-        newClickedSteps[index] = true;
-        setClickedSteps(newClickedSteps);
-        navigate(steps[index].path); // ✅ actually move to step
-      } else {
-        alert("Please fill all required fields before proceeding.");
-      }
-    };
+
+const keys = JSON.parse(localStorage.getItem("dashboardKeys") || "{}");
+
+const steps = [
+  { label: "Personal Information", icon: <PersonIcon />, path: `/dashboard/${keys.step1}` },
+  { label: "Family Background", icon: <FamilyRestroomIcon />, path: `/dashboard/${keys.step2}` },
+  { label: "Educational Attainment", icon: <SchoolIcon />, path: `/dashboard/${keys.step3}` },
+  { label: "Health Medical Records", icon: <HealthAndSafetyIcon />, path: `/dashboard/${keys.step4}` },
+  { label: "Other Information", icon: <InfoIcon />, path: `/dashboard/${keys.step5}` },
+];
+
+
+  const [activeStep, setActiveStep] = useState(1);
+  const [clickedSteps, setClickedSteps] = useState(Array(steps.length).fill(false));
+
+  const handleStepClick = (index) => {
+    if (isFormValid()) {
+      setActiveStep(index);
+      const newClickedSteps = [...clickedSteps];
+      newClickedSteps[index] = true;
+      setClickedSteps(newClickedSteps);
+      navigate(steps[index].path); // ✅ actually move to step
+    } else {
+      alert("Please fill all required fields before proceeding.");
+    }
+  };
   const fetchPersonData = async (id) => {
     try {
       const res = await axios.get(`http://localhost:5000/api/person/${id}`);
@@ -1437,69 +1441,69 @@ const Dashboard2 = (props) => {
             </Box>
 
 
-            <Box display="flex" justifyContent="space-between" mt={4}>
-              {/* Previous Page Button */}
-              <Button
-                variant="contained"
-                component={Link}
-                to="/dashboard1"
-                startIcon={
-                  <ArrowBackIcon
-                    sx={{
-                      color: '#000',
-                      transition: 'color 0.3s',
-                    }}
-                  />
-                }
-                sx={{
-                  backgroundColor: '#E8C999',
-                  color: '#000',
-                  '&:hover': {
-                    backgroundColor: '#6D2323',
-                    color: '#fff',
-                    '& .MuiSvgIcon-root': {
-                      color: '#fff',
-                    },
-                  },
-                }}
-              >
-                Previous Step
-              </Button>
+         <Box display="flex" justifyContent="space-between" mt={4}>
+  {/* Previous Page Button */}
+  <Button
+    variant="contained"
+    onClick={() => navigate(`/dashboard/${keys.step1}`)} // ✅ FIXED
+    startIcon={
+      <ArrowBackIcon
+        sx={{
+          color: "#000",
+          transition: "color 0.3s",
+        }}
+      />
+    }
+    sx={{
+      backgroundColor: "#E8C999",
+      color: "#000",
+      "&:hover": {
+        backgroundColor: "#6D2323",
+        color: "#fff",
+        "& .MuiSvgIcon-root": {
+          color: "#fff",
+        },
+      },
+    }}
+  >
+    Previous Step
+  </Button>
 
-              <Button
-                variant="contained"
-                onClick={(e) => {
-                  handleUpdate();
+  {/* Next Step Button */}
+  <Button
+    variant="contained"
+    onClick={() => {
+      handleUpdate();
 
-                  if (isFormValid()) {
-                    navigate("/dashboard3");
-                  } else {
-                    alert("Please complete all required fields before proceeding.");
-                  }
-                }}
-                endIcon={
-                  <ArrowForwardIcon
-                    sx={{
-                      color: '#fff',
-                      transition: 'color 0.3s',
-                    }}
-                  />
-                }
-                sx={{
-                  backgroundColor: '#6D2323',
-                  color: '#fff',
-                  '&:hover': {
-                    backgroundColor: '#E8C999',
-                    color: '#000',
-                    '& .MuiSvgIcon-root': {
-                      color: '#000',
-                    },
-                  },
-                }}
-              >
-                Next Step
-              </Button>
-            </Box>
+      if (isFormValid()) {
+        navigate(`/dashboard/${keys.step3}`); // ✅ Goes to next step
+      } else {
+        alert("Please complete all required fields before proceeding.");
+      }
+    }}
+    endIcon={
+      <ArrowForwardIcon
+        sx={{
+          color: "#fff",
+          transition: "color 0.3s",
+        }}
+      />
+    }
+    sx={{
+      backgroundColor: "#6D2323",
+      color: "#fff",
+      "&:hover": {
+        backgroundColor: "#E8C999",
+        color: "#000",
+        "& .MuiSvgIcon-root": {
+          color: "#000",
+        },
+      },
+    }}
+  >
+    Next Step
+  </Button>
+</Box>
 
 
           </Container>

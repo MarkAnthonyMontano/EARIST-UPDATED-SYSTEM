@@ -36,6 +36,9 @@ const Dashboard4 = (props) => {
     const storedUser = localStorage.getItem("email");
     const storedRole = localStorage.getItem("role");
     const storedID = localStorage.getItem("person_id");
+    const keys = JSON.parse(localStorage.getItem("dashboardKeys") || "{}");
+    navigate(`/dashboard/${keys.step4}`);
+
 
     const overrideId = props?.adminOverridePersonId; // new
 
@@ -105,28 +108,28 @@ const Dashboard4 = (props) => {
   };
 
 
- 
+const keys = JSON.parse(localStorage.getItem("dashboardKeys") || "{}");
 
-  const steps = [
-    { label: "Personal Information", icon: <PersonIcon />, path: "/dashboard1" },
-    { label: "Family Background", icon: <FamilyRestroomIcon />, path: "/dashboard2" },
-    { label: "Educational Attainment", icon: <SchoolIcon />, path: "/dashboard3" },
-    { label: "Health Medical Records", icon: <HealthAndSafetyIcon />, path: "/dashboard4" },
-    { label: "Other Information", icon: <InfoIcon />, path: "/dashboard5" },
-  ];
+const steps = [
+  { label: "Personal Information", icon: <PersonIcon />, path: `/dashboard/${keys.step1}` },
+  { label: "Family Background", icon: <FamilyRestroomIcon />, path: `/dashboard/${keys.step2}` },
+  { label: "Educational Attainment", icon: <SchoolIcon />, path: `/dashboard/${keys.step3}` },
+  { label: "Health Medical Records", icon: <HealthAndSafetyIcon />, path: `/dashboard/${keys.step4}` },
+  { label: "Other Information", icon: <InfoIcon />, path: `/dashboard/${keys.step5}` },
+];
 
 
   const [activeStep, setActiveStep] = useState(3);
   const [clickedSteps, setClickedSteps] = useState(Array(steps.length).fill(false));
 
-const handleStepClick = (index) => {
-  // remove or replace isFormValid() until implemented
-  setActiveStep(index);
-  const newClickedSteps = [...clickedSteps];
-  newClickedSteps[index] = true;
-  setClickedSteps(newClickedSteps);
-  navigate(steps[index].path);
-};
+  const handleStepClick = (index) => {
+    // remove or replace isFormValid() until implemented
+    setActiveStep(index);
+    const newClickedSteps = [...clickedSteps];
+    newClickedSteps[index] = true;
+    setClickedSteps(newClickedSteps);
+    navigate(steps[index].path);
+  };
 
 
   const inputStyle = {
@@ -283,7 +286,7 @@ const handleStepClick = (index) => {
         ))}
       </Box>
       <Container>
-        
+
         <Container>
           <h1 style={{ fontSize: "50px", fontWeight: "bold", textAlign: "center", color: "maroon", marginTop: "25px" }}>APPLICANT FORM</h1>
           <div style={{ textAlign: "center" }}>Complete the applicant form to secure your place for the upcoming academic year at EARIST.</div>
@@ -1020,66 +1023,64 @@ const handleStepClick = (index) => {
 
 
 
-            <Box display="flex" justifyContent="space-between" alignItems="center" mt={4}>
-              {/* Previous Page Button */}
-              <Button
-                variant="contained"
-                component={Link}
-                to="/dashboard3"
-                startIcon={
-                  <ArrowBackIcon
-                    sx={{
-                      color: '#000',
-                      transition: 'color 0.3s',
-                    }}
-                  />
-                }
-                sx={{
-                  backgroundColor: '#E8C999',
-                  color: '#000',
-                  '&:hover': {
-                    backgroundColor: '#6D2323',
-                    color: '#fff',
-                    '& .MuiSvgIcon-root': {
-                      color: '#fff',
-                    },
-                  },
-                }}
-              >
-                Previous Step
-              </Button>
+         <Box display="flex" justifyContent="space-between" alignItems="center" mt={4}>
+  {/* Previous Page Button */}
+  <Button
+    variant="contained"
+    onClick={() => navigate(`/dashboard/${keys.step3}`)} // ✅ FIXED
+    startIcon={
+      <ArrowBackIcon
+        sx={{
+          color: "#000",
+          transition: "color 0.3s",
+        }}
+      />
+    }
+    sx={{
+      backgroundColor: "#E8C999",
+      color: "#000",
+      "&:hover": {
+        backgroundColor: "#6D2323",
+        color: "#fff",
+        "& .MuiSvgIcon-root": {
+          color: "#fff",
+        },
+      },
+    }}
+  >
+    Previous Step
+  </Button>
 
-              {/* Next Step Button */}
-              <Button
-                variant="contained"
-                onClick={(e) => {
-                  handleUpdate();
-                  navigate("/dashboard5");
-
-                }}
-                endIcon={
-                  <ArrowForwardIcon
-                    sx={{
-                      color: '#fff',
-                      transition: 'color 0.3s',
-                    }}
-                  />
-                }
-                sx={{
-                  backgroundColor: '#6D2323',
-                  color: '#fff',
-                  '&:hover': {
-                    backgroundColor: '#E8C999',
-                    color: '#000',
-                    '& .MuiSvgIcon-root': {
-                      color: '#000',
-                    },
-                  },
-                }}
-              >
-                Next Step
-              </Button>
-            </Box>
+  {/* Next Step Button */}
+  <Button
+    variant="contained"
+    onClick={() => {
+      handleUpdate();
+      navigate(`/dashboard/${keys.step5}`); // ✅ Goes to step5
+    }}
+    endIcon={
+      <ArrowForwardIcon
+        sx={{
+          color: "#fff",
+          transition: "color 0.3s",
+        }}
+      />
+    }
+    sx={{
+      backgroundColor: "#6D2323",
+      color: "#fff",
+      "&:hover": {
+        backgroundColor: "#E8C999",
+        color: "#000",
+        "& .MuiSvgIcon-root": {
+          color: "#000",
+        },
+      },
+    }}
+  >
+    Next Step
+  </Button>
+</Box>
 
 
 

@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useRef } from 'react';
 import React from "react";
 import axios from 'axios';
 import {
@@ -20,8 +20,6 @@ import NotificationsIcon from '@mui/icons-material/Notifications';
 import Search from '@mui/icons-material/Search';
 import PersonIcon from "@mui/icons-material/Person";
 import DescriptionIcon from "@mui/icons-material/Description";
-import AssignmentIcon from "@mui/icons-material/Assignment";
-import RecordVoiceOverIcon from "@mui/icons-material/RecordVoiceOver";
 import SchoolIcon from "@mui/icons-material/School";
 import CheckCircleIcon from "@mui/icons-material/CheckCircle";
 import LocalHospitalIcon from "@mui/icons-material/LocalHospital";
@@ -31,7 +29,12 @@ import { Link, useLocation } from "react-router-dom";
 import { useNavigate } from "react-router-dom";
 
 import CloudUploadIcon from '@mui/icons-material/CloudUpload';
-import io from 'socket.io-client';
+import { io } from "socket.io-client";
+
+const socket = io("http://localhost:5000");
+
+
+
 
 const requiredDocs = [
   { label: 'PSA Birth Certificate', key: 'BirthCertificate' },
@@ -44,11 +47,10 @@ const tabs = [
   { label: "Applicant List", to: "/applicant_list", icon: <ListAltIcon /> },
   { label: "Applicant Form", to: "/admin_dashboard1", icon: <PersonIcon /> },
   { label: "Documents Submitted", to: "/student_requirements", icon: <DescriptionIcon /> },
-  { label: "Interview", to: "/interview", icon: <RecordVoiceOverIcon /> },
-  { label: "Qualifying Exam", to: "/qualifying_exam", icon: <SchoolIcon /> },
+  { label: "Interview / Qualifiying Exam", to: "/interview", icon: <SchoolIcon /> },
   { label: "College Approval", to: "/college_approval", icon: <CheckCircleIcon /> },
   { label: "Medical Clearance", to: "/medical_clearance", icon: <LocalHospitalIcon /> },
-  { label: "Applicant Status", to: "/applicant_status", icon: <HowToRegIcon /> },
+  { label: "Student Numbering", to: "/student_numbering", icon: <HowToRegIcon /> },
 ];
 
 const remarksOptions = [
@@ -144,6 +146,7 @@ const StudentRequirements = () => {
   const navigate = useNavigate();
   const [activeStep, setActiveStep] = useState(2);
   const [clickedSteps, setClickedSteps] = useState(Array(tabs.length).fill(false));
+  const socketRef = useRef(null);
 
   const [explicitSelection, setExplicitSelection] = useState(false);
 
@@ -235,6 +238,8 @@ const StudentRequirements = () => {
     const storedUser = localStorage.getItem("email");
     const storedRole = localStorage.getItem("role");
     const storedID = localStorage.getItem("person_id");
+    setUserID(storedID);
+
 
     if (storedUser && storedRole && storedID) {
       setUser(storedUser);
@@ -318,27 +323,23 @@ const StudentRequirements = () => {
   };
 
 
-
-const fetchPersonData = async (personID) => {
-  if (!personID || personID === "undefined") {
-    console.warn("Invalid personID for person data:", personID);
-    return;
-  }
-
-  try {
-    const res = await axios.get(`http://localhost:5000/api/person_with_applicant/${personID}`);
-
-    const safePerson = {
-      ...res.data,
-      document_status: res.data.document_status || "On process",
-    };
-    setPerson(safePerson); // ✅ update only person
-    // ❌ Do not call setSelectedPerson here (it causes the loop)
-  } catch (error) {
-    console.error("❌ Failed to fetch person data:", error?.response?.data || error.message);
-  }
-};
-
+  const fetchPersonData = async (personID) => {
+    if (!personID || personID === "undefined") {
+      console.warn("Invalid personID for person data:", personID);
+      return;
+    }
+    try {
+      const res = await axios.get(`http://localhost:5000/api/person_with_applicant/${personID}`);
+      const safePerson = {
+        ...res.data,
+        document_status: res.data.document_status || "On process",
+      };
+      setPerson(safePerson);   // ✅ only update person
+      // ❌ don't call setSelectedPerson here
+    } catch (error) {
+      console.error("❌ Failed to fetch person data:", error?.response?.data || error.message);
+    }
+  };
 
 
 
@@ -411,12 +412,13 @@ const fetchPersonData = async (personID) => {
   };
 
   const handleStatusChange = async (uploadId, remarkValue) => {
-    const remarks = remarksMap[uploadId] || ""; // get remarks for this upload ID
+    const remarks = remarksMap[uploadId] || "";
 
     try {
       await axios.put(`http://localhost:5000/uploads/remarks/${uploadId}`, {
-        status: remarkValue,   // keep it as number now
-        remarks: remarks,
+        status: remarkValue,
+        remarks,
+        user_id: userID,   // 👈 add this
       });
 
       if (selectedPerson?.applicant_number) {
@@ -427,8 +429,6 @@ const fetchPersonData = async (personID) => {
       console.error('Error updating Status:', err);
     }
   };
-
-
 
 
   const handleUploadSubmit = async () => {
@@ -487,18 +487,16 @@ const fetchPersonData = async (personID) => {
       await axios.put(`http://localhost:5000/uploads/remarks/${uploadId}`, {
         remarks: newRemark,
         status: uploads.find((u) => u.upload_id === uploadId)?.status || "0",
+        user_id: userID,   // 👈 add this
       });
 
       if (selectedPerson?.applicant_number) {
-        // Wait for uploads to refresh
         await fetchUploadsByApplicantNumber(selectedPerson.applicant_number);
       }
 
-      // Delay hiding input slightly to allow rerender to pick up new remarks
       setTimeout(() => {
         setEditingRemarkId(null);
-      }, 100); // small delay ensures UI is refreshed with updated data
-
+      }, 100);
     } catch (err) {
       console.error("Failed to save remarks:", err);
     }
@@ -509,8 +507,8 @@ const fetchPersonData = async (personID) => {
     setPerson((prev) => ({ ...prev, [name]: value }));
 
     if (name === "document_status") {
-      const value = e.target.value || "On process"; // default if empty
-      setPerson((prev) => ({ ...prev, document_status: value }));
+      const newValue = value || "On process"; // default if empty
+      setPerson((prev) => ({ ...prev, document_status: newValue }));
 
       if (uploads.length === 0) return;
 
@@ -518,13 +516,16 @@ const fetchPersonData = async (personID) => {
         await Promise.all(
           uploads.map((upload) =>
             axios.put(`http://localhost:5000/uploads/document-status/${upload.upload_id}`, {
-              document_status: value,
+              document_status: newValue,
+              user_id: userID,
             })
           )
         );
 
-        // 🔹 Emit a socket event so ApplicantList can refresh instantly
-        socket.emit("document_status_updated");
+        // 🔹 Emit socket event using a ref (not redefined every render)
+        if (socketRef.current) {
+          socketRef.current.emit("document_status_updated");
+        }
 
         if (selectedPerson?.applicant_number) {
           await fetchUploadsByApplicantNumber(selectedPerson.applicant_number);
@@ -533,10 +534,18 @@ const fetchPersonData = async (personID) => {
         console.error("❌ Failed to update document statuses:", err);
       }
     }
-
-
   };
 
+  useEffect(() => {
+    socket.on("notification", (data) => {
+      console.log("📢 Notification:", data);
+      if (selectedPerson?.applicant_number) {
+        fetchUploadsByApplicantNumber(selectedPerson.applicant_number);
+      }
+    });
+
+    return () => socket.off("notification");
+  }, [selectedPerson]);
 
 
 
@@ -755,10 +764,11 @@ const fetchPersonData = async (personID) => {
         </TableCell>
 
         <TableCell style={{ border: "1px solid maroon" }}>
-          {selectedPerson
-            ? `[${selectedPerson.applicant_number}] ${selectedPerson.last_name?.toUpperCase()}, ${selectedPerson.first_name?.toUpperCase()} ${selectedPerson.middle_name?.toUpperCase() || ''} ${selectedPerson.extension?.toUpperCase() || ''}`
-            : ''}
+          {(selectedPerson?.applicant_number || person?.applicant_number)
+            ? `[${selectedPerson?.applicant_number || person?.applicant_number}] ${(selectedPerson?.last_name || person?.last_name || "").toUpperCase()}, ${(selectedPerson?.first_name || person?.first_name || "").toUpperCase()} ${(selectedPerson?.middle_name || person?.middle_name || "").toUpperCase()} ${(selectedPerson?.extension || person?.extension || "").toUpperCase()}`
+            : ""}
         </TableCell>
+
 
         <TableCell style={{ border: "1px solid maroon" }}>
           <Box display="flex" justifyContent="center" gap={1}>
@@ -904,72 +914,72 @@ const fetchPersonData = async (personID) => {
         <hr style={{ border: "1px solid #ccc", width: "100%" }} />
         <br />
 
-    <Box
-  sx={{
-    display: "flex",
-    justifyContent: "space-between",
-    alignItems: "center",
-    width: "100%",
-    mt: 2,
-    flexWrap: "wrap", // so it wraps on smaller screens
-  }}
->
-  {tabs.map((tab, index) => (
-    <React.Fragment key={index}>
-      {/* Step Card */}
-      <Card
-        onClick={() => handleStepClick(index, tab.to)}
-        sx={{
-          flex: 1,
-          maxWidth: `${100 / tabs.length}%`, // evenly fit in one row
-          height: 100,
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "center",
-          cursor: "pointer",
-          borderRadius: 2,
-          border: "2px solid #6D2323",
-
-          backgroundColor: activeStep === index ? "#6D2323" : "#E8C999",
-          color: activeStep === index ? "#fff" : "#000",
-          boxShadow:
-            activeStep === index
-              ? "0px 4px 10px rgba(0,0,0,0.3)"
-              : "0px 2px 6px rgba(0,0,0,0.15)",
-          transition: "0.3s ease",
-          "&:hover": {
-            backgroundColor: activeStep === index ? "#5a1c1c" : "#f5d98f",
-          },
-        }}
-      >
         <Box
           sx={{
             display: "flex",
-            flexDirection: "column",
+            justifyContent: "space-between",
             alignItems: "center",
+            width: "100%",
+            mt: 2,
+            flexWrap: "wrap", // so it wraps on smaller screens
           }}
         >
-          <Box sx={{ fontSize: 32, mb: 0.5 }}>{tab.icon}</Box>
-          <Typography
-            sx={{ fontSize: 14, fontWeight: "bold", textAlign: "center" }}
-          >
-            {tab.label}
-          </Typography>
-        </Box>
-      </Card>
+          {tabs.map((tab, index) => (
+            <React.Fragment key={index}>
+              {/* Step Card */}
+              <Card
+                onClick={() => handleStepClick(index, tab.to)}
+                sx={{
+                  flex: 1,
+                  maxWidth: `${100 / tabs.length}%`, // evenly fit in one row
+                  height: 100,
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  cursor: "pointer",
+                  borderRadius: 2,
+                  border: "2px solid #6D2323",
 
-      {/* Spacer instead of line */}
-      {index < tabs.length - 1 && (
-        <Box
-          sx={{
-            flex: 0.1,
-            mx: 1, // keeps spacing between cards
-          }}
-        />
-      )}
-    </React.Fragment>
-  ))}
-</Box>
+                  backgroundColor: activeStep === index ? "#6D2323" : "#E8C999",
+                  color: activeStep === index ? "#fff" : "#000",
+                  boxShadow:
+                    activeStep === index
+                      ? "0px 4px 10px rgba(0,0,0,0.3)"
+                      : "0px 2px 6px rgba(0,0,0,0.15)",
+                  transition: "0.3s ease",
+                  "&:hover": {
+                    backgroundColor: activeStep === index ? "#5a1c1c" : "#f5d98f",
+                  },
+                }}
+              >
+                <Box
+                  sx={{
+                    display: "flex",
+                    flexDirection: "column",
+                    alignItems: "center",
+                  }}
+                >
+                  <Box sx={{ fontSize: 32, mb: 0.5 }}>{tab.icon}</Box>
+                  <Typography
+                    sx={{ fontSize: 14, fontWeight: "bold", textAlign: "center" }}
+                  >
+                    {tab.label}
+                  </Typography>
+                </Box>
+              </Card>
+
+              {/* Spacer instead of line */}
+              {index < tabs.length - 1 && (
+                <Box
+                  sx={{
+                    flex: 0.1,
+                    mx: 1, // keeps spacing between cards
+                  }}
+                />
+              )}
+            </React.Fragment>
+          ))}
+        </Box>
 
         <br />
         {/* Applicant ID and Name */}
@@ -981,8 +991,7 @@ const fetchPersonData = async (personID) => {
                 <TableCell sx={{ color: 'white', fontSize: '20px', fontFamily: 'Arial Black', border: 'none' }}>
                   Applicant ID:&nbsp;
                   <span style={{ fontFamily: "Arial", fontWeight: "normal", textDecoration: "underline" }}>
-                    {selectedPerson?.applicant_number || "N/A"}
-
+                    {selectedPerson?.applicant_number || person?.applicant_number || "N/A"}
                   </span>
                 </TableCell>
 
@@ -993,14 +1002,17 @@ const fetchPersonData = async (personID) => {
                 >
                   Applicant Name:&nbsp;
                   <span style={{ fontFamily: "Arial", fontWeight: "normal", textDecoration: "underline" }}>
-                    {selectedPerson?.last_name?.toUpperCase()}, {selectedPerson?.first_name?.toUpperCase()}{" "}
-                    {selectedPerson?.middle_name?.toUpperCase()} {selectedPerson?.extension_name?.toUpperCase() || ""}
+                    {(selectedPerson?.last_name || person?.last_name || "").toUpperCase()},
+                    &nbsp;{(selectedPerson?.first_name || person?.first_name || "").toUpperCase()}{" "}
+                    {(selectedPerson?.middle_name || person?.middle_name || "").toUpperCase()}{" "}
+                    {(selectedPerson?.extension || person?.extension || "").toUpperCase()}
                   </span>
                 </TableCell>
               </TableRow>
             </TableHead>
           </Table>
         </TableContainer>
+
 
         <TableContainer component={Paper} sx={{ width: '100%', border: "2px solid maroon" }}>
           {/* SHS GWA and Height row below Applicant Name */}
@@ -1137,8 +1149,8 @@ const fetchPersonData = async (personID) => {
                   size="small"
                   name="document_status"
                   value={person.document_status || ""}
-                  onChange={handleChange} // ✅ this stays
-                  sx={{ width: "300px" }}
+                  onChange={handleChange}
+                  sx={{ width: "300px", mr: 2 }}
                   InputProps={{ sx: { height: 35 } }}
                   inputProps={{ style: { padding: "4px 8px", fontSize: "12px" } }}
                 >
@@ -1148,6 +1160,12 @@ const fetchPersonData = async (personID) => {
                   <MenuItem value="Disapproved">Disapproved</MenuItem>
                   <MenuItem value="Program Closed">Program Closed</MenuItem>
                 </TextField>
+
+                {uploads[0]?.evaluator_email && (
+                  <Typography variant="caption" sx={{ marginLeft: 1 }}>
+                    Updated by: {uploads[0].evaluator_email}
+                  </Typography>
+                )}
               </Box>
 
 

@@ -71,6 +71,33 @@ const storage = multer.diskStorage({
 const upload = multer({ storage: multer.memoryStorage() });
 const nodemailer = require("nodemailer");
 
+// Middleware to check if user can access a step
+const checkStepAccess = (requiredStep) => {
+  return async (req, res, next) => {
+    const { id } = req.params; // person_id
+    try {
+      const [rows] = await db.execute(
+        "SELECT current_step FROM person_table WHERE person_id = ?",
+        [id]
+      );
+
+      if (!rows.length) {
+        return res.status(404).json({ error: "Person not found" });
+      }
+
+      const currentStep = rows[0].current_step;
+
+      if (currentStep < requiredStep) {
+        return res.status(403).json({ error: "You cannot access this step yet." });
+      }
+
+      next();
+    } catch (err) {
+      console.error("Step check error:", err);
+      res.status(500).json({ error: "Server error" });
+    }
+  };
+};
 
 
 // ---------------- TRANSPORTER ----------------
@@ -639,9 +666,10 @@ app.delete("/uploads/:id", async (req, res) => {
 
 
 // ✅ UPDATE Remarks (admin only)
+// ✅ UPDATE Remarks (admin only)
 app.put("/uploads/remarks/:upload_id", async (req, res) => {
   const { upload_id } = req.params;
-  const { status, remarks, document_status } = req.body;
+  const { status, remarks, document_status, user_id } = req.body; // ⬅️ include user_id
 
   // Validate status
   const validStatuses = ["0", "1", "2"];
@@ -650,10 +678,10 @@ app.put("/uploads/remarks/:upload_id", async (req, res) => {
   }
 
   try {
-    // Update upload with new status, remarks, and document status
+    // Update upload with new status, remarks, document status, and evaluator
     const [result] = await db.query(
-      "UPDATE requirement_uploads SET status = ?, remarks = ?, document_status = ? WHERE upload_id = ?",
-      [status, remarks || null, document_status || null, upload_id]
+      "UPDATE requirement_uploads SET status = ?, remarks = ?, document_status = ?, last_updated_by = ? WHERE upload_id = ?",
+      [status, remarks || null, document_status || null, user_id, upload_id]
     );
 
     if (result.affectedRows === 0) {
@@ -776,26 +804,26 @@ app.put("/api/update-requirements/:person_id", async (req, res) => {
 
 app.put("/uploads/document-status/:upload_id", async (req, res) => {
   const { upload_id } = req.params;
-  const { document_status } = req.body;
+  const { document_status, user_id } = req.body;
 
-  if (!document_status) {
-    return res.status(400).json({ error: "Missing document_status" });
+  if (!document_status || !user_id) {
+    return res.status(400).json({ error: "document_status and user_id are required" });
   }
 
   try {
     const [result] = await db.query(
-      "UPDATE requirement_uploads SET document_status = ? WHERE upload_id = ?",
-      [document_status, upload_id]
+      "UPDATE requirement_uploads SET document_status = ?, last_updated_by = ? WHERE upload_id = ?",
+      [document_status, user_id, upload_id]
     );
 
     if (result.affectedRows === 0) {
       return res.status(404).json({ error: "Upload not found" });
     }
 
-    res.status(200).json({ message: "Document status updated successfully" });
+    res.json({ success: true, message: "Document status updated" });
   } catch (err) {
-    console.error("Failed to update document_status:", err);
-    res.status(500).json({ error: "Failed to update document_status" });
+    console.error("❌ Failed to update document status:", err);
+    res.status(500).json({ error: "Failed to update document status" });
   }
 });
 
@@ -821,7 +849,8 @@ app.get('/uploads/all', async (req, res) => {
         p.first_name,
         p.middle_name,
         p.last_name,
-        p.emailAddress
+       ua.email AS evaluator_email,
+       ua.role AS evaluator_role
       FROM requirement_uploads ru
       JOIN requirements_table rt ON ru.requirements_id = rt.id
       JOIN person_table p ON ru.person_id = p.person_id
@@ -832,6 +861,29 @@ app.get('/uploads/all', async (req, res) => {
     res.status(500).json({ error: 'Failed to fetch uploads' });
   }
 });
+
+// Update document_status and store who updated it
+app.put("/uploads/document-status/:id", async (req, res) => {
+  const { document_status, user_id } = req.body;
+  const uploadId = req.params.id;
+
+  try {
+    const sql = `
+      UPDATE requirement_uploads
+      SET document_status = ?, last_updated_by = ?
+      WHERE upload_id = ?
+    `;
+    await db.query(sql, [document_status, user_id, uploadId]);
+
+    res.json({ success: true });
+  } catch (err) {
+    console.error("Error updating document status:", err);
+    res.status(500).json({ message: "Internal Server Error", error: err });
+  }
+});
+
+
+
 // === Upload for Medical Clearance (Vaccination Card only) ===
 app.post("/api/upload/vaccine", upload.single("file"), async (req, res) => {
   try {
@@ -910,12 +962,10 @@ app.post("/api/upload/vaccine", upload.single("file"), async (req, res) => {
 });
 
 // ✅ Get uploads by applicant_number (Admin use)
-// ✅ FETCH FILES by applicant number — for registrar to view student uploads
 app.get("/uploads/by-applicant/:applicant_number", async (req, res) => {
   const applicant_number = req.params.applicant_number;
 
   try {
-    // Get person_id by applicant_number
     const [personResult] = await db.query(
       "SELECT person_id FROM applicant_numbering_table WHERE applicant_number = ?",
       [applicant_number]
@@ -927,7 +977,6 @@ app.get("/uploads/by-applicant/:applicant_number", async (req, res) => {
 
     const person_id = personResult[0].person_id;
 
-    // ✅ Get uploads with remarks included
     const [uploads] = await db.query(`
       SELECT 
         ru.upload_id,
@@ -935,14 +984,17 @@ app.get("/uploads/by-applicant/:applicant_number", async (req, res) => {
         ru.person_id,
         ru.file_path,
         ru.original_name,
-        ru.remarks,         -- ✅ Include this line
+        ru.remarks,
         ru.status,
         ru.document_status,
         ru.registrar_status,
         ru.created_at,
-        rt.description
+        rt.description,
+        ua.email AS evaluator_email,
+        ua.role  AS evaluator_role
       FROM requirement_uploads ru
       JOIN requirements_table rt ON ru.requirements_id = rt.id
+      LEFT JOIN enrollment.user_accounts ua ON ru.last_updated_by = ua.person_id
       WHERE ru.person_id = ?
     `, [person_id]);
 
@@ -952,6 +1004,34 @@ app.get("/uploads/by-applicant/:applicant_number", async (req, res) => {
     res.status(500).json({ message: "Internal Server Error", error: err });
   }
 });
+
+
+// ✅ Update document status and track who edited
+app.put('/uploads/document-status/:uploadId', (req, res) => {
+  const { document_status, user_id } = req.body; // 👈 registrar person_id should be here
+  const { uploadId } = req.params;
+
+  if (!document_status || !user_id) {
+    return res.status(400).json({ error: "document_status and user_id are required" });
+  }
+
+  const sql = `
+    UPDATE requirement_uploads 
+    SET document_status = ?, last_updated_by = ?, registrar_status = 1, created_at = NOW()
+    WHERE upload_id = ?
+  `;
+
+  db3.query(sql, [document_status, user_id, uploadId], (err, result) => {
+    if (err) {
+      console.error("❌ Failed to update document status:", err);
+      return res.status(500).json({ error: "Failed to update document status" });
+    }
+    res.json({ success: true, message: "Document status updated", result });
+  });
+});
+
+// ✅ Get uploads with evaluator info
+
 
 
 // Add to server.js
@@ -1041,7 +1121,7 @@ app.get("/api/notifications", async (req, res) => {
 
 
 // -------------------------------------------- GET APPLICANT ADMISSION DATA ------------------------------------------------//
-// ✅ GET ALL APPLICANTS (unique, latest requirement_uploads)
+// ✅ GET ALL APPLICANTS (always returns all applicants)
 app.get("/api/all-applicants", async (req, res) => {
   try {
     const [rows] = await db.execute(`
@@ -1058,11 +1138,10 @@ app.get("/api/all-applicants", async (req, res) => {
         p.created_at,              
         a.applicant_number,
         ea.schedule_id,                 
-        es.exam_date,
-        yt.year_id AS school_year,
-        yt.year_description,
-        sy.semester_id, 
-        sy.astatus,
+        ees.day_description AS exam_day,
+        ees.room_description AS exam_room,
+        ees.start_time AS exam_start_time,
+        ees.end_time AS exam_end_time,
         ru.upload_id,              
         ru.document_status,
         ru.submitted_documents,
@@ -1074,13 +1153,9 @@ app.get("/api/all-applicants", async (req, res) => {
         ON p.person_id = a.person_id
       LEFT JOIN admission.exam_applicants AS ea
         ON a.applicant_number = ea.applicant_id
-      LEFT JOIN admission.exam_schedule AS es
-        ON ea.schedule_id = es.exam_id
-      LEFT JOIN enrollment.year_table AS yt
-        ON YEAR(es.exam_date) = yt.year_description
-      LEFT JOIN enrollment.active_school_year_table AS sy
-        ON yt.year_id = sy.year_id
-      LEFT JOIN admission.requirement_uploads AS ru
+      LEFT JOIN admission.entrance_exam_schedule AS ees
+        ON ea.schedule_id = ees.schedule_id
+      LEFT JOIN admission.requirement_uploads AS ru 
         ON ru.upload_id = (
           SELECT MAX(r2.upload_id) 
           FROM admission.requirement_uploads r2
@@ -1088,7 +1163,6 @@ app.get("/api/all-applicants", async (req, res) => {
         )
       LEFT JOIN admission.person_status_table AS ps
         ON p.person_id = ps.person_id
-      WHERE (sy.astatus = 1 OR sy.astatus IS NULL)
       ORDER BY p.last_name ASC, p.first_name ASC;
     `);
 
@@ -1100,7 +1174,7 @@ app.get("/api/all-applicants", async (req, res) => {
 });
 
 
-// ✅ GET ONLY NOT-EMAILED APPLICANTS (unique, latest requirement_uploads)
+// ================= NOT EMAILED APPLICANTS =================
 app.get("/api/not-emailed-applicants", async (req, res) => {
   try {
     const [rows] = await db.execute(`
@@ -1110,23 +1184,24 @@ app.get("/api/not-emailed-applicants", async (req, res) => {
         p.first_name,
         p.middle_name,
         p.extension,
-        p.program,
         p.emailAddress,
+        p.program,
         a.applicant_number,
         ea.schedule_id,
         ea.email_sent,
-        es.exam_date,
+        ees.day_description,
+        ees.room_description,
+        ees.start_time,
+        ees.end_time,
         ru.upload_id,
-        ru.document_status,
-        ru.submitted_documents,
         ps.exam_status
       FROM admission.person_table AS p
       LEFT JOIN admission.applicant_numbering_table AS a 
         ON p.person_id = a.person_id
       LEFT JOIN admission.exam_applicants AS ea 
         ON a.applicant_number = ea.applicant_id
-      LEFT JOIN admission.exam_schedule AS es 
-        ON ea.schedule_id = es.exam_id
+      LEFT JOIN admission.entrance_exam_schedule AS ees
+        ON ea.schedule_id = ees.schedule_id
       LEFT JOIN admission.requirement_uploads AS ru 
         ON ru.upload_id = (
           SELECT MAX(r2.upload_id) 
@@ -1135,13 +1210,61 @@ app.get("/api/not-emailed-applicants", async (req, res) => {
         )
       LEFT JOIN admission.person_status_table AS ps 
         ON p.person_id = ps.person_id
-      WHERE (ea.email_sent = 0 OR ea.email_sent IS NULL)   -- not emailed
+      WHERE (ea.email_sent = 0 OR ea.email_sent IS NULL)
       ORDER BY p.last_name ASC, p.first_name ASC;
     `);
 
     res.json(rows);
   } catch (err) {
     console.error("❌ Error fetching not-emailed applicants:", err);
+    res.status(500).send("Server error");
+  }
+});
+
+// ================= ENTRANCE EXAM SCHEDULE =================
+
+// Get all schedules (rooms + times)
+app.get("/exam_schedules", async (req, res) => {
+  try {
+    const [rows] = await db.execute(`
+      SELECT 
+        schedule_id,
+        day_description,
+        room_description,
+        start_time,
+        end_time,
+        room_quota
+      FROM admission.entrance_exam_schedule
+      ORDER BY day_description, start_time
+    `);
+    res.json(rows);
+  } catch (err) {
+    console.error("❌ Error fetching exam schedules:", err);
+    res.status(500).send("Server error");
+  }
+});
+
+// Get schedules with current occupancy count
+app.get("/exam_schedules_with_count", async (req, res) => {
+  try {
+    const [rows] = await db.execute(`
+      SELECT 
+        ees.schedule_id,
+        ees.day_description,
+        ees.room_description,
+        ees.start_time,
+        ees.end_time,
+        ees.room_quota,
+        COUNT(ea.applicant_id) AS current_occupancy
+      FROM admission.entrance_exam_schedule ees
+      LEFT JOIN admission.exam_applicants ea
+        ON ees.schedule_id = ea.schedule_id
+      GROUP BY ees.schedule_id
+      ORDER BY ees.day_description, ees.start_time
+    `);
+    res.json(rows);
+  } catch (err) {
+    console.error("❌ Error fetching exam schedules with count:", err);
     res.status(500).send("Server error");
   }
 });
@@ -1159,6 +1282,8 @@ app.get("/api/applicants-with-number", async (req, res) => {
         p.extension,
         a.applicant_number,
         p.program,
+
+        -- Exam scores
         e.English AS english,
         e.Science AS science,
         e.Filipino AS filipino,
@@ -1168,15 +1293,25 @@ app.get("/api/applicants-with-number", async (req, res) => {
           e.final_rating,
           (COALESCE(e.English,0) + COALESCE(e.Science,0) + COALESCE(e.Filipino,0) + COALESCE(e.Math,0) + COALESCE(e.Abstract,0))
         ) AS final_rating,
+
+        -- User info
         e.user AS user_id,
-        u.email AS user_email   -- ✅ no extra comma
+        u.email AS user_email,
+
+        -- ✅ Interview scores
+        COALESCE(i.qualifying_exam_score, 0) AS qualifying_exam_score,
+        COALESCE(i.qualifying_interview_score, 0) AS qualifying_interview_score,
+        COALESCE(i.total_ave, 0) AS total_ave
+
       FROM admission.person_table p
       INNER JOIN admission.applicant_numbering_table a 
         ON p.person_id = a.person_id
       LEFT JOIN admission.admission_exam e
         ON p.person_id = e.person_id
       LEFT JOIN enrollment.user_accounts u
-        ON e.user = u.id   -- ✅ link by user_accounts.id
+        ON e.user = u.id
+      LEFT JOIN admission.interview_table i
+        ON p.person_id = i.person_id  -- ✅ join interview scores
       ORDER BY p.person_id ASC
     `);
 
@@ -1186,8 +1321,6 @@ app.get("/api/applicants-with-number", async (req, res) => {
     res.status(500).send("Server error");
   }
 });
-
-
 
 
 // Get full person info + applicant_number
@@ -1237,93 +1370,102 @@ app.get("/api/person_with_applicant/:id", async (req, res) => {
   }
 });
 
-
-// ✅ College Approval GET + POST inside server.js
-app.get("/college_approval/:person_id", (req, res) => {
+// GET approval by person_id
+// GET approval by person_id
+app.get("/college_approval/:person_id", async (req, res) => {
   const { person_id } = req.params;
-
-  db.query(
-    "SELECT * FROM college_approval WHERE person_id = ?",
-    [person_id],
-    (err, results) => {
-      if (err) {
-        console.error("Error fetching college approval:", err);
-        return res.status(500).json({ error: "Database error" });
-      }
-      res.json(results.length > 0 ? results[0] : null);
+  try {
+    const [rows] = await db.query(
+      "SELECT * FROM college_approval WHERE person_id = ?",
+      [person_id]
+    );
+    if (rows.length === 0) {
+      return res.json(null);
     }
-  );
-});
-
-app.post("/college_approval", (req, res) => {
-  const { person_id, percentage_score, total, status, custom_status } = req.body;
-
-  if (!person_id) {
-    return res.status(400).json({ error: "person_id is required" });
+    res.json(rows[0]);
+  } catch (err) {
+    console.error("Error fetching college_approval by person_id:", err);
+    res.status(500).send("Server error");
   }
-
-  db.query(
-    `INSERT INTO college_approval (person_id, percentage_score, total, status, custom_status) 
-     VALUES (?, ?, ?, ?, ?)
-     ON DUPLICATE KEY UPDATE 
-        percentage_score = VALUES(percentage_score),
-        total = VALUES(total),
-        status = VALUES(status),
-        custom_status = VALUES(custom_status)`,
-    [person_id, percentage_score, total, status, custom_status],
-    (err, result) => {
-      if (err) {
-        console.error("Error saving college approval:", err);
-        return res.status(500).json({ error: "Database error" });
-      }
-      res.json({ success: true, message: "College approval saved successfully" });
-    }
-  );
 });
 
-// ✅ Get Qualifying Exam by person_id
-app.get("/qualifying_exam/:person_id", (req, res) => {
-  const { person_id } = req.params;
+// INSERT or UPDATE approval with subject scores
+app.post("/college_approval", async (req, res) => {
+  const {
+    person_id,
+    english_percentage,
+    english_score,
+    science_percentage,
+    science_score,
+    filipino_percentage,
+    filipino_score,
+    math_percentage,
+    math_score,
+    abstract_percentage,
+    abstract_score,
+    percentage_score,
+    total,
+    status,
+    custom_status,
+  } = req.body;
 
-  db.query(
-    "SELECT * FROM qualifying_exam WHERE person_id = ?",
-    [person_id],
-    (err, results) => {
-      if (err) {
-        console.error("Error fetching qualifying exam:", err);
-        return res.status(500).json({ error: "Database error" });
-      }
-      res.json(results.length > 0 ? results[0] : null);
+  try {
+    // check if record exists
+    const [rows] = await db.query(
+      "SELECT * FROM college_approval WHERE person_id = ?",
+      [person_id]
+    );
+
+    if (rows.length > 0) {
+      // update
+      await db.query(
+        `UPDATE college_approval
+         SET english_percentage=?, english_score=?, 
+             science_percentage=?, science_score=?, 
+             filipino_percentage=?, filipino_score=?, 
+             math_percentage=?, math_score=?, 
+             abstract_percentage=?, abstract_score=?, 
+             percentage_score=?, total=?, status=?, custom_status=?, updated_at=NOW()
+         WHERE person_id = ?`,
+        [
+          english_percentage, english_score,
+          science_percentage, science_score,
+          filipino_percentage, filipino_score,
+          math_percentage, math_score,
+          abstract_percentage, abstract_score,
+          percentage_score, total, status, custom_status,
+          person_id
+        ]
+      );
+      res.json({ message: "College approval updated" });
+    } else {
+      // insert
+      await db.query(
+        `INSERT INTO college_approval (
+          person_id, 
+          english_percentage, english_score,
+          science_percentage, science_score,
+          filipino_percentage, filipino_score,
+          math_percentage, math_score,
+          abstract_percentage, abstract_score,
+          percentage_score, total, status, custom_status
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        [
+          person_id,
+          english_percentage, english_score,
+          science_percentage, science_score,
+          filipino_percentage, filipino_score,
+          math_percentage, math_score,
+          abstract_percentage, abstract_score,
+          percentage_score, total, status, custom_status
+        ]
+      );
+      res.json({ message: "College approval created" });
     }
-  );
-});
-
-// ✅ Insert/Update Qualifying Exam
-app.post("/qualifying_exam", (req, res) => {
-  const { person_id, score, remarks, user, status, custom_status } = req.body;
-
-  if (!person_id) {
-    return res.status(400).json({ error: "person_id is required" });
+  } catch (err) {
+    console.error("Error saving college_approval:", err);
+    res.status(500).send("Server error");
   }
-
-  db.query(
-    `INSERT INTO qualifying_exam (person_id, score, remarks, user, status, custom_status) 
-     VALUES (?, ?, ?, ?, ?, ?)
-     ON DUPLICATE KEY UPDATE 
-        score = VALUES(score),
-        remarks = VALUES(remarks),
-        user = VALUES(user),
-        status = VALUES(status),
-        custom_status = VALUES(custom_status)`,
-    [person_id, score, remarks, user, status, custom_status],
-    (err, result) => {
-      if (err) {
-        console.error("Error saving qualifying exam:", err);
-        return res.status(500).json({ error: "Database error" });
-      }
-      res.json({ success: true, message: "Qualifying exam saved successfully" });
-    }
-  );
 });
 
 
@@ -1486,6 +1628,55 @@ app.put("/api/person/:id", async (req, res) => {
     res.status(500).json({ error: "Database error" });
   }
 });
+
+// GET for Dashboard1
+app.get("/api/dashboard1/:id", checkStepAccess(1), async (req, res) => {
+  const { id } = req.params;
+  const [rows] = await db.execute("SELECT * FROM person_table WHERE person_id = ?", [id]);
+  res.json(rows[0]);
+});
+
+// GET for Dashboard2
+app.get("/api/dashboard2/:id", checkStepAccess(2), async (req, res) => {
+  const { id } = req.params;
+  const [rows] = await db.execute("SELECT * FROM person_table WHERE person_id = ?", [id]);
+  res.json(rows[0]);
+});
+
+// GET for Dashboard3
+app.get("/api/dashboard3/:id", checkStepAccess(3), async (req, res) => {
+  const { id } = req.params;
+  const [rows] = await db.execute("SELECT * FROM person_table WHERE person_id = ?", [id]);
+  res.json(rows[0]);
+});
+
+// GET for Dashboard4
+app.get("/api/dashboard4/:id", checkStepAccess(4), async (req, res) => {
+  const { id } = req.params;
+  const [rows] = await db.execute("SELECT * FROM person_table WHERE person_id = ?", [id]);
+  res.json(rows[0]);
+});
+
+// GET for Dashboard5
+app.get("/api/dashboard5/:id", checkStepAccess(5), async (req, res) => {
+  const { id } = req.params;
+  const [rows] = await db.execute("SELECT * FROM person_table WHERE person_id = ?", [id]);
+  res.json(rows[0]);
+});
+
+app.put("/api/person/:id/progress", async (req, res) => {
+  const { id } = req.params;
+  const { nextStep } = req.body;
+
+  try {
+    await db.execute("UPDATE person_table SET current_step = ? WHERE person_id = ?", [nextStep, id]);
+    res.json({ message: "Progress updated" });
+  } catch (err) {
+    console.error("Error updating progress:", err);
+    res.status(500).json({ error: "Database error" });
+  }
+});
+
 
 // For Major 
 app.get("/api/programs", async (req, res) => {
@@ -1854,10 +2045,10 @@ app.put("/api/person/:id/document-status", async (req, res) => {
 // });
 // OTP storage: otp, expiry, and cooldown
 // ----------------- GLOBAL STORES -----------------
-let otpStore = {}; 
+let otpStore = {};
 // Structure: { email: { otp, expiresAt, cooldownUntil } }
 
-let loginAttempts = {}; 
+let loginAttempts = {};
 // Structure: { emailOrStudentNumber: { count, lockUntil } }
 
 // ----------------- OTP GENERATOR -----------------
@@ -1941,6 +2132,37 @@ app.post("/verify-otp", (req, res) => {
 
   res.json({ message: "OTP verified successfully" });
 });
+
+app.post("/api/verify-password", async (req, res) => {
+  const { person_id, password } = req.body;
+
+  if (!person_id || !password) {
+    return res.status(400).json({ success: false, message: "Person ID and password required" });
+  }
+
+  try {
+    const [rows] = await db3.query(
+      "SELECT * FROM user_accounts WHERE person_id = ?",
+      [person_id]
+    );
+
+    if (rows.length === 0) {
+      return res.status(400).json({ success: false, message: "User not found" });
+    }
+
+    const user = rows[0];
+    const isMatch = await bcrypt.compare(password, user.password);
+    if (!isMatch) {
+      return res.status(401).json({ success: false, message: "Invalid password" });
+    }
+
+    res.json({ success: true });
+  } catch (err) {
+    console.error("verify-password error:", err);
+    res.status(500).json({ success: false, message: "Server error" });
+  }
+});
+
 
 // ----------------- LOGIN -----------------
 app.post("/login", async (req, res) => {
@@ -2665,12 +2887,12 @@ io.on("connection", (socket) => {
   });
 
   // 🔹 Get exam scores for a person
-app.get("/api/exam/:personId", async (req, res) => {
-  try {
-    const { personId } = req.params;
+  app.get("/api/exam/:personId", async (req, res) => {
+    try {
+      const { personId } = req.params;
 
-    const [rows] = await db.query(
-      `SELECT 
+      const [rows] = await db.query(
+        `SELECT 
          id,
          person_id,
          English,
@@ -2683,22 +2905,22 @@ app.get("/api/exam/:personId", async (req, res) => {
          DATE_FORMAT(date_created, '%Y-%m-%d') AS date_created
        FROM admission_exam 
        WHERE person_id = ?`,
-      [personId]
-    );
+        [personId]
+      );
 
-    res.json(rows); 
-  } catch (err) {
-    console.error("❌ GET exam error:", err);
-    res.status(500).json({ error: "Database error" });
-  }
-});
+      res.json(rows);
+    } catch (err) {
+      console.error("❌ GET exam error:", err);
+      res.status(500).json({ error: "Database error" });
+    }
+  });
 
-// Get applicant exam schedule
-app.get("/api/exam-schedule/:applicant_number", async (req, res) => {
-  const { applicant_number } = req.params;
+  // Get applicant exam schedule
+  app.get("/api/exam-schedule/:applicant_number", async (req, res) => {
+    const { applicant_number } = req.params;
 
-  try {
-    const [rows] = await db.query(`
+    try {
+      const [rows] = await db.query(`
       SELECT 
         s.day_description AS date_of_exam,
         s.start_time,
@@ -2714,49 +2936,49 @@ app.get("/api/exam-schedule/:applicant_number", async (req, res) => {
       LIMIT 1
     `, [applicant_number]);
 
-    if (rows.length === 0) {
-      return res.status(404).json({ message: "No exam schedule found" });
+      if (rows.length === 0) {
+        return res.status(404).json({ message: "No exam schedule found" });
+      }
+
+      res.json(rows[0]);
+    } catch (err) {
+      console.error("Error fetching exam schedule:", err);
+      res.status(500).json({ error: "Database error" });
     }
-
-    res.json(rows[0]);
-  } catch (err) {
-    console.error("Error fetching exam schedule:", err);
-    res.status(500).json({ error: "Database error" });
-  }
-});
+  });
 
 
-// Get person by applicant_number
-app.get("/api/person-by-applicant/:applicant_number", async (req, res) => {
-  const { applicant_number } = req.params;
+  // Get person by applicant_number
+  app.get("/api/person-by-applicant/:applicant_number", async (req, res) => {
+    const { applicant_number } = req.params;
 
-  try {
-    const [rows] = await db.execute(
-      `SELECT p.*, a.applicant_number 
+    try {
+      const [rows] = await db.execute(
+        `SELECT p.*, a.applicant_number 
        FROM person_table p
        JOIN applicant_numbering_table a 
          ON p.person_id = a.person_id
        WHERE a.applicant_number = ?`,
-      [applicant_number]
-    );
+        [applicant_number]
+      );
 
-    if (rows.length === 0) {
-      return res.status(404).json({ error: "Applicant not found" });
+      if (rows.length === 0) {
+        return res.status(404).json({ error: "Applicant not found" });
+      }
+
+      res.json(rows[0]);
+    } catch (err) {
+      console.error("Error fetching person by applicant_number:", err);
+      res.status(500).json({ error: "Server error" });
     }
+  });
 
-    res.json(rows[0]);
-  } catch (err) {
-    console.error("Error fetching person by applicant_number:", err);
-    res.status(500).json({ error: "Server error" });
-  }
-});
+  app.get("/api/applicant-schedule/:applicant_number", async (req, res) => {
+    try {
+      const { applicant_number } = req.params;
 
-app.get("/api/applicant-schedule/:applicant_number", async (req, res) => {
-  try {
-    const { applicant_number } = req.params;
-
-    const [rows] = await db.query(
-      `SELECT 
+      const [rows] = await db.query(
+        `SELECT 
           s.schedule_id,
           s.day_description,
           s.room_description,
@@ -2771,27 +2993,26 @@ app.get("/api/applicant-schedule/:applicant_number", async (req, res) => {
        INNER JOIN exam_applicants ea
          ON ea.schedule_id = s.schedule_id
        WHERE ea.applicant_id = ?`,
-      [applicant_number]
-    );
+        [applicant_number]
+      );
 
-    if (rows.length === 0) {
-      return res
-        .status(404)
-        .json({ error: "No schedule found for this applicant." });
+      if (rows.length === 0) {
+        return res
+          .status(404)
+          .json({ error: "No schedule found for this applicant." });
+      }
+
+      res.json(rows[0]);
+    } catch (err) {
+      console.error("Error fetching applicant schedule:", err.message);
+      res.status(500).json({ error: "Failed to fetch applicant schedule" });
     }
-
-    res.json(rows[0]);
-  } catch (err) {
-    console.error("Error fetching applicant schedule:", err.message);
-    res.status(500).json({ error: "Failed to fetch applicant schedule" });
-  }
-});
+  });
 
 
-// Get applicants assigned to a proctor
+  // Get applicants assigned to a proctor
 app.get("/api/proctor-applicants/:proctor_id", async (req, res) => {
   const { proctor_id } = req.params;
-
   try {
     const [rows] = await db.query(`
       SELECT 
@@ -2803,6 +3024,7 @@ app.get("/api/proctor-applicants/:proctor_id", async (req, res) => {
         pt.program,
         es.exam_date,
         es.room_name,
+        es.room_no,
         u.email AS proctor_email
       FROM exam_applicants ea
       JOIN applicant_numbering_table an ON ea.applicant_id = an.applicant_number
@@ -2811,7 +3033,6 @@ app.get("/api/proctor-applicants/:proctor_id", async (req, res) => {
       JOIN user_accounts u ON es.proctor_id = u.id
       WHERE es.proctor_id = ?
     `, [proctor_id]);
-
     res.json(rows);
   } catch (err) {
     console.error("❌ Error fetching proctor applicants:", err);
@@ -2819,65 +3040,66 @@ app.get("/api/proctor-applicants/:proctor_id", async (req, res) => {
   }
 });
 
-// Search proctor by name and return their assigned applicants
-app.get("/api/proctor-applicants", async (req, res) => {
-  const { query } = req.query;
+  // Search proctor by name and return their assigned applicants
+  app.get("/api/proctor-applicants", async (req, res) => {
+    const { query } = req.query;
 
-  if (!query) {
-    return res.status(400).json({ message: "Query is required" });
-  }
-
-  try {
-    // Find schedules where this proctor is assigned
-    const [schedules] = await db.query(
-      `SELECT schedule_id, day_description, room_description, start_time, end_time, proctor
-       FROM entrance_exam_schedule
-       WHERE proctor LIKE ?`,
-      [`%${query}%`]
-    );
-
-    if (schedules.length === 0) {
-      return res.status(404).json({ message: "Proctor not found in schedules" });
+    if (!query) {
+      return res.status(400).json({ message: "Query is required" });
     }
 
-    // For each schedule, get assigned applicants with email_sent
-    const results = [];
-    for (const sched of schedules) {
-      const [applicants] = await db.query(
-        `SELECT ea.applicant_id, ea.email_sent,
+    try {
+      // Find schedules where this proctor is assigned
+      const [schedules] = await db.query(
+        `SELECT schedule_id, day_description, room_description, room_no, start_time, end_time, proctor
+FROM entrance_exam_schedule
+WHERE proctor LIKE ?
+`,
+        [`%${query}%`]
+      );
+
+      if (schedules.length === 0) {
+        return res.status(404).json({ message: "Proctor not found in schedules" });
+      }
+
+      // For each schedule, get assigned applicants with email_sent
+      const results = [];
+      for (const sched of schedules) {
+        const [applicants] = await db.query(
+          `SELECT ea.applicant_id, ea.email_sent,
                 an.applicant_number,
                 p.last_name, p.first_name, p.middle_name, p.program
          FROM exam_applicants ea
          JOIN applicant_numbering_table an ON ea.applicant_id = an.applicant_number
          JOIN person_table p ON an.person_id = p.person_id
          WHERE ea.schedule_id = ?`,
-        [sched.schedule_id]
-      );
+          [sched.schedule_id]
+        );
 
-      results.push({
-        schedule: sched,
-        applicants
-      });
+        results.push({
+          schedule: sched,
+          applicants
+        });
+      }
+
+      res.json(results);
+    } catch (err) {
+      console.error("❌ Error fetching proctor applicants:", err);
+      res.status(500).json({ error: "Failed to fetch applicants for proctor" });
+    }
+  });
+
+
+  // Search proctor by name or email
+  app.get("/api/search-proctor", async (req, res) => {
+    const { query } = req.query;
+
+    if (!query) {
+      return res.status(400).json({ message: "Query is required" });
     }
 
-    res.json(results);
-  } catch (err) {
-    console.error("❌ Error fetching proctor applicants:", err);
-    res.status(500).json({ error: "Failed to fetch applicants for proctor" });
-  }
-});
-
-
-// Search proctor by name or email
-app.get("/api/search-proctor", async (req, res) => {
-  const { query } = req.query;
-
-  if (!query) {
-    return res.status(400).json({ message: "Query is required" });
-  }
-
-  try {
-    const [rows] = await db.query(`
+    try {
+      const [rows] = await db.query(`
       SELECT id, person_id, email, first_name, middle_name, last_name, role
       FROM user_accounts
       WHERE role = 'proctor'
@@ -2885,42 +3107,42 @@ app.get("/api/search-proctor", async (req, res) => {
       LIMIT 1
     `, [`%${query}%`, `%${query}%`, `%${query}%`]);
 
-    if (rows.length === 0) {
-      return res.status(404).json({ message: "Proctor not found" });
+      if (rows.length === 0) {
+        return res.status(404).json({ message: "Proctor not found" });
+      }
+
+      res.json({
+        id: rows[0].id,
+        email: rows[0].email,
+        name: `${rows[0].last_name}, ${rows[0].first_name} ${rows[0].middle_name || ""}`
+      });
+    } catch (err) {
+      console.error("❌ Error searching proctor:", err);
+      res.status(500).json({ error: "Failed to search proctor" });
     }
-
-    res.json({
-      id: rows[0].id,
-      email: rows[0].email,
-      name: `${rows[0].last_name}, ${rows[0].first_name} ${rows[0].middle_name || ""}`
-    });
-  } catch (err) {
-    console.error("❌ Error searching proctor:", err);
-    res.status(500).json({ error: "Failed to search proctor" });
-  }
-});
+  });
 
 
-// 🔹 Save exam scores for a single applicant
-app.post("/exam/save", async (req, res) => {
-  try {
-    const { applicant_number, english, science, filipino, math, abstract, final_rating, user } = req.body;
+  // 🔹 Save exam scores for a single applicant
+  app.post("/exam/save", async (req, res) => {
+    try {
+      const { applicant_number, english, science, filipino, math, abstract, final_rating, user } = req.body;
 
-    // 1️⃣ Find person_id from applicant_number
-    const [rows] = await db.query(
-      "SELECT person_id FROM applicant_numbering_table WHERE applicant_number = ?",
-      [applicant_number]
-    );
+      // 1️⃣ Find person_id from applicant_number
+      const [rows] = await db.query(
+        "SELECT person_id FROM applicant_numbering_table WHERE applicant_number = ?",
+        [applicant_number]
+      );
 
-    if (rows.length === 0) {
-      return res.status(400).json({ error: "Applicant number not found" });
-    }
+      if (rows.length === 0) {
+        return res.status(400).json({ error: "Applicant number not found" });
+      }
 
-    const personId = rows[0].person_id;
+      const personId = rows[0].person_id;
 
-    // 2️⃣ Insert or update the admission_exam row
-    await db.query(
-      `INSERT INTO admission_exam 
+      // 2️⃣ Insert or update the admission_exam row
+      await db.query(
+        `INSERT INTO admission_exam 
         (person_id, English, Science, Filipino, Math, Abstract, final_rating, user, date_created)
        VALUES (?, ?, ?, ?, ?, ?, ?, ?, NOW())
        ON DUPLICATE KEY UPDATE
@@ -2932,56 +3154,56 @@ app.post("/exam/save", async (req, res) => {
          final_rating = VALUES(final_rating),
          user = VALUES(user),
          date_created = VALUES(date_created)`,
-      [personId, english, science, filipino, math, abstract, final_rating, user]
-    );
-
-    res.json({ success: true, message: "Exam data saved!" });
-  } catch (err) {
-    console.error("❌ Save error:", err);
-    res.status(500).json({ error: "Failed to save exam data" });
-  }
-});
-
-// 🔹 Import exam scores from Excel (using Applicant ID)
-// ✅ Assuming you have req.user from login/session
-app.post("/api/exam/import", upload.single("file"), async (req, res) => {
-  try {
-    if (!req.file) {
-      return res.status(400).json({ error: "No file uploaded" });
-    }
-
-    const workbook = XLSX.read(req.file.buffer, { type: "buffer" });
-    const sheetName = workbook.SheetNames[0];
-    const sheet = workbook.Sheets[sheetName];
-    const rows = XLSX.utils.sheet_to_json(sheet);
-
-    let insertedCount = 0;
-    let skippedCount = 0;
-
-    // 🔑 Hardcode for now, later get from req.user
-    const loggedInUserId = 1;  
-
-    for (const row of rows) {
-      const applicantNumber = row["Applicant ID"] || row["applicant_number"];
-      if (!applicantNumber) {
-        skippedCount++;
-        continue;
-      }
-
-      const [match] = await db.query(
-        "SELECT person_id FROM applicant_numbering_table WHERE applicant_number = ?",
-        [applicantNumber]
+        [personId, english, science, filipino, math, abstract, final_rating, user]
       );
 
-      if (match.length === 0) {
-        skippedCount++;
-        continue;
+      res.json({ success: true, message: "Exam data saved!" });
+    } catch (err) {
+      console.error("❌ Save error:", err);
+      res.status(500).json({ error: "Failed to save exam data" });
+    }
+  });
+
+  // 🔹 Import exam scores from Excel (using Applicant ID)
+  // ✅ Assuming you have req.user from login/session
+  app.post("/api/exam/import", upload.single("file"), async (req, res) => {
+    try {
+      if (!req.file) {
+        return res.status(400).json({ error: "No file uploaded" });
       }
 
-      const personId = match[0].person_id;
+      const workbook = XLSX.read(req.file.buffer, { type: "buffer" });
+      const sheetName = workbook.SheetNames[0];
+      const sheet = workbook.Sheets[sheetName];
+      const rows = XLSX.utils.sheet_to_json(sheet);
 
-      await db.query(
-        `INSERT INTO admission_exam 
+      let insertedCount = 0;
+      let skippedCount = 0;
+
+      // 🔑 Hardcode for now, later get from req.user
+      const loggedInUserId = 1;
+
+      for (const row of rows) {
+        const applicantNumber = row["Applicant ID"] || row["applicant_number"];
+        if (!applicantNumber) {
+          skippedCount++;
+          continue;
+        }
+
+        const [match] = await db.query(
+          "SELECT person_id FROM applicant_numbering_table WHERE applicant_number = ?",
+          [applicantNumber]
+        );
+
+        if (match.length === 0) {
+          skippedCount++;
+          continue;
+        }
+
+        const personId = match[0].person_id;
+
+        await db.query(
+          `INSERT INTO admission_exam 
            (person_id, English, Science, Filipino, Math, Abstract, final_rating, user, date_created)
          VALUES (?, ?, ?, ?, ?, ?, ?, ?, NOW())
          ON DUPLICATE KEY UPDATE
@@ -2993,221 +3215,184 @@ app.post("/api/exam/import", upload.single("file"), async (req, res) => {
            final_rating = VALUES(final_rating),
            user = VALUES(user),
            date_created = VALUES(date_created)`,
-        [
-          personId,
-          row["English"] || 0,
-          row["Science"] || 0,
-          row["Filipino"] || 0,
-          row["Math"] || 0,
-          row["Abstract"] || 0,
-          row["Final Rating"] || 0,
-          loggedInUserId, // ✅ now stores user_accounts.id, not text
-        ]
-      );
+          [
+            personId,
+            row["English"] || 0,
+            row["Science"] || 0,
+            row["Filipino"] || 0,
+            row["Math"] || 0,
+            row["Abstract"] || 0,
+            row["Final Rating"] || 0,
+            loggedInUserId, // ✅ now stores user_accounts.id, not text
+          ]
+        );
 
-      insertedCount++;
+        insertedCount++;
+      }
+
+      res.json({
+        success: true,
+        message: `✅ Import done. Inserted/updated: ${insertedCount}, Skipped: ${skippedCount}`,
+      });
+    } catch (err) {
+      console.error("❌ Excel import error:", err);
+      res.status(500).json({ error: "Failed to import Excel" });
+    }
+  });
+
+
+
+// ==================== INTERVIEW ROUTES ====================
+// ==============================
+// INTERVIEW ROUTES
+// ==============================
+
+// 1. Get interview by applicant_number
+app.get("/api/interview/:applicant_number", async (req, res) => {
+  const { applicant_number } = req.params;
+  try {
+    const [rows] = await db.query(
+      `SELECT 
+         a.applicant_number,
+         a.person_id,
+         i.interview_id,
+         i.qualifying_exam_score,
+         i.qualifying_interview_score,
+         i.total_ave
+       FROM applicant_numbering_table a
+       LEFT JOIN interview_table i ON i.person_id = a.person_id
+       WHERE a.applicant_number = ?`,
+      [applicant_number]
+    );
+
+    if (!rows.length) {
+      return res.json(null);
     }
 
-    res.json({
-      success: true,
-      message: `✅ Import done. Inserted/updated: ${insertedCount}, Skipped: ${skippedCount}`,
-    });
+    // normalize null -> 0
+    const fixed = {
+      ...rows[0],
+      qualifying_exam_score: rows[0].qualifying_exam_score ?? 0,
+      qualifying_interview_score: rows[0].qualifying_interview_score ?? 0,
+      total_ave: rows[0].total_ave ?? 0,
+    };
+
+    res.json(fixed);
   } catch (err) {
-    console.error("❌ Excel import error:", err);
-    res.status(500).json({ error: "Failed to import Excel" });
+    console.error("❌ Error fetching interview:", err);
+    res.status(500).json({ message: "Server error" });
   }
 });
 
 
-
-  // ==================== INTERVIEW ROUTES ====================
-  // 1. Get interview by applicant_number (JOIN applicant_numbering_table)
-  app.get("/api/interview/:applicant_number", async (req, res) => {
-    const { applicant_number } = req.params;
-    try {
-      const sql = `
-      SELECT i.*, a.applicant_number
-      FROM interview_table i
-      JOIN applicant_numbering_table a ON i.person_id = a.person_id
-      WHERE a.applicant_number = ?
-    `;
-      const [rows] = await db.query(sql, [applicant_number]);
-      res.json(rows[0] || null);
-    } catch (err) {
-      console.error("❌ Error fetching interview:", err);
-      res.status(500).json({ message: "Server error" });
-    }
-  });
-
-  app.get("/api/interview/:applicant_number", async (req, res) => {
-    const { applicant_number } = req.params;
-    try {
-      const [rows] = await db.query(
-        `SELECT 
-         a.applicant_number,
-         a.person_id,
-         i.interview_id,
-         i.entrance_exam_interviewer,
-         i.college_interviewer,
-         i.entrance_exam_score,
-         i.college_exam_score,
-         i.total_score,
-         i.interview_date,
-         i.status,
-         i.custom_status,
-         i.remarks
-       FROM applicant_numbering_table a
-       LEFT JOIN interview_table i ON i.person_id = a.person_id
-       WHERE a.applicant_number = ?`,
-        [applicant_number]
-      );
-      res.json(rows[0] || null);
-    } catch (err) {
-      console.error("❌ Error fetching interview:", err);
-      res.status(500).json({ message: "Server error" });
-    }
-  });
-
-  // SAVE or UPDATE INTERVIEW (Save & Edit in 1 button)
-  app.post("/api/interview", async (req, res) => {
-    try {
-      const {
-        applicant_number,
-        entrance_exam_interviewer,
-        college_interviewer,
-        entrance_exam_score,
-        college_exam_score,
-        total_score,
-        status,
-        custom_status,
-        remarks,
-      } = req.body;
-
-      // Find person_id from applicant_number
-      const [applicantRow] = await db.query(
-        "SELECT person_id FROM applicant_numbering_table WHERE applicant_number = ?",
-        [applicant_number]
-      );
-
-      if (applicantRow.length === 0) {
-        return res.status(404).json({ message: "Applicant not found" });
-      }
-
-      const { person_id } = applicantRow[0];
-
-      // Check if already has an interview
-      const [existing] = await db.query(
-        "SELECT interview_id FROM interview_table WHERE person_id = ?",
-        [person_id]
-      );
-
-      if (existing.length > 0) {
-        // UPDATE
-        await db.query(
-          `UPDATE interview_table 
-         SET entrance_exam_interviewer = ?, 
-             college_interviewer = ?, 
-             entrance_exam_score = ?, 
-             college_exam_score = ?, 
-             total_score = ?, 
-             interview_date = NOW(),
-             status = ?, 
-             custom_status = ?, 
-             remarks = ?
-         WHERE person_id = ?`,
-          [
-            entrance_exam_interviewer,
-            college_interviewer,
-            entrance_exam_score,
-            college_exam_score,
-            total_score,
-            status,
-            custom_status,
-            remarks,
-            person_id,
-          ]
-        );
-        return res.json({ message: "✅ Interview updated successfully" });
-      } else {
-        // INSERT
-        await db.query(
-          `INSERT INTO interview_table 
-         (person_id, entrance_exam_interviewer, college_interviewer, entrance_exam_score, 
-          college_exam_score, total_score, interview_date, status, custom_status, remarks)
-         VALUES (?, ?, ?, ?, ?, ?, NOW(), ?, ?, ?)`,
-          [
-            person_id,
-            entrance_exam_interviewer,
-            college_interviewer,
-            entrance_exam_score,
-            college_exam_score,
-            total_score,
-            status,
-            custom_status,
-            remarks,
-          ]
-        );
-        return res.json({ message: "✅ Interview saved successfully" });
-      }
-    } catch (error) {
-      console.error("❌ Error saving interview:", error);
-      res.status(500).json({ message: "Server error", error });
-    }
-  });
-
-
-  app.put("/api/interview/:applicant_number", upload.none(), async (req, res) => {
-    const { applicant_number } = req.params;
+// 2. SAVE or UPDATE INTERVIEW (Save & Edit in 1 button)
+app.post("/api/interview", async (req, res) => {
+  try {
     const {
-      entrance_exam_interviewer,
-      college_interviewer,
-      entrance_exam_score,
-      college_exam_score,
-      status,
-      custom_status,
-      remarks
+      applicant_number,
+      qualifying_exam_score,
+      qualifying_interview_score
     } = req.body;
 
-    try {
-      const [a] = await db.query(
-        "SELECT person_id FROM applicant_numbering_table WHERE applicant_number = ?",
-        [applicant_number]
-      );
-      if (!a.length) return res.status(404).json({ success: false, message: "Applicant number not found" });
+    console.log("📥 Payload:", req.body);
 
-      const person_id = a[0].person_id;
-      const total_score = Number(entrance_exam_score || 0) + Number(college_exam_score || 0);
+    // 1. Get person_id
+    const [applicantRow] = await db.query(
+      "SELECT person_id FROM applicant_numbering_table WHERE applicant_number = ?",
+      [applicant_number]
+    );
 
-      const [result] = await db.query(
-        `UPDATE interview_table
-       SET entrance_exam_interviewer=?, college_interviewer=?,
-           entrance_exam_score=?, college_exam_score=?, total_score=?,
-           status=?, custom_status=?, remarks=?, interview_date=NOW()
-       WHERE person_id=?`,
-        [
-          entrance_exam_interviewer,
-          college_interviewer,
-          entrance_exam_score,
-          college_exam_score,
-          total_score,
-          status,
-          custom_status,
-          remarks,
-          person_id
-        ]
-      );
-
-      if (result.affectedRows === 0) {
-        return res.status(404).json({ success: false, message: "Interview not found" });
-      }
-
-      res.json({ success: true, message: "Interview updated" });
-    } catch (err) {
-      console.error("❌ Error updating interview:", err);
-      res.status(500).json({ success: false, message: "Server error" });
+    if (applicantRow.length === 0) {
+      return res.status(404).json({ error: "Applicant not found" });
     }
-  });
 
+    const person_id = applicantRow[0].person_id;
+
+    // 2. Compute safe scores
+    const examScore = Number(qualifying_exam_score) || 0;
+    const interviewScore = Number(qualifying_interview_score) || 0;
+    const total_ave = (examScore + interviewScore) / 2;
+
+    // 3. Check if record exists
+    const [existing] = await db.query(
+      "SELECT interview_id FROM interview_table WHERE person_id = ?",
+      [person_id]
+    );
+
+    if (existing.length > 0) {
+      // Update
+      await db.query(
+        `UPDATE interview_table 
+         SET qualifying_exam_score=?, 
+             qualifying_interview_score=?, 
+             total_ave=?
+         WHERE person_id=?`,
+        [examScore, interviewScore, total_ave, person_id]
+      );
+    } else {
+      // Insert
+      await db.query(
+        `INSERT INTO interview_table 
+         (person_id, qualifying_exam_score, qualifying_interview_score, total_ave) 
+         VALUES (?, ?, ?, ?)`,
+        [person_id, examScore, interviewScore, total_ave]
+      );
+    }
+
+    res.json({ message: "Interview saved successfully" });
+  } catch (err) {
+    console.error("🔥 Error saving interview:", err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+
+// 3. Update interview by applicant_number
+app.put("/api/interview/:applicant_number", async (req, res) => {
+  const { applicant_number } = req.params;
+  const { qualifying_exam_score, qualifying_interview_score } = req.body;
+
+  try {
+    // 1. Get person_id
+    const [a] = await db.query(
+      "SELECT person_id FROM applicant_numbering_table WHERE applicant_number = ?",
+      [applicant_number]
+    );
+    if (!a.length) {
+      return res
+        .status(404)
+        .json({ success: false, message: "Applicant number not found" });
+    }
+
+    const person_id = a[0].person_id;
+
+    // 2. Compute safe values
+    const examScore = Number(qualifying_exam_score) || 0;
+    const interviewScore = Number(qualifying_interview_score) || 0;
+    const total_ave = (examScore + interviewScore) / 2;
+
+    // 3. Update
+    const [result] = await db.query(
+      `UPDATE interview_table
+       SET qualifying_exam_score=?, 
+           qualifying_interview_score=?, 
+           total_ave=?
+       WHERE person_id=?`,
+      [examScore, interviewScore, total_ave, person_id]
+    );
+
+    if (result.affectedRows === 0) {
+      return res
+        .status(404)
+        .json({ success: false, message: "Interview not found" });
+    }
+
+    res.json({ success: true, message: "Interview updated successfully" });
+  } catch (err) {
+    console.error("❌ Error updating interview:", err);
+    res.status(500).json({ success: false, message: "Server error" });
+  }
+});
 
   // ---------------------- Assign Student Number ----------------------
   socket.on("assign-student-number", async (person_id) => {
@@ -6161,48 +6346,6 @@ app.get("/student-data/:studentNumber", async (req, res) => {
 });
 
 // EXAM API ENDPOINTS
-app.get('/exam_slots', async (req, res) => {
-  const sql = `
-    SELECT 
-      s.exam_id,
-      s.exam_date,
-      s.exam_start_time,
-      s.exam_end_time,
-      COUNT(ea.schedule_id) AS occupied
-    FROM exam_schedule s
-    LEFT JOIN exam_applicants ea ON s.exam_id = ea.schedule_id
-    GROUP BY s.exam_id
-  `;
-
-  try {
-    const [results] = await db.query(sql);
-    res.json(results);
-  } catch (err) {
-    console.error('Database error fetching slots:', err);
-    res.status(500).json({ error: 'Database error fetching slots' });
-  }
-});
-
-app.post('/add_exam_slot', async (req, res) => {
-  const { exam_date, start_time, end_time } = req.body;
-
-  if (!exam_date || !start_time || !end_time) {
-    return res.status(400).json({ error: 'All fields are required (date, start time, end time).' });
-  }
-
-  const sql = `
-    INSERT INTO exam_schedule (exam_date, exam_start_time, exam_end_time)
-    VALUES (?, ?, ?)
-  `;
-
-  try {
-    const [result] = await db.query(sql, [exam_date, start_time, end_time]);
-    res.json({ message: 'Slot added successfully', insertId: result.insertId });
-  } catch (err) {
-    console.error('Error inserting new exam slot:', err);
-    res.status(500).json({ error: 'Failed to add exam slot' });
-  }
-});
 
 app.post('/applicant_schedule', async (req, res) => {
   const { applicant_id, exam_id } = req.body;
@@ -6242,17 +6385,6 @@ app.get('/get_applicant_schedule', async (req, res) => {
   }
 });
 
-app.get('/get_exam_date', async (req, res) => {
-  const query = `SELECT * FROM exam_schedule`;
-
-  try {
-    const [results] = await db.query(query);
-    res.json(results);
-  } catch (err) {
-    console.error('Database error fetching exam dates:', err);
-    res.status(500).json({ error: 'Database error fetching exam dates' });
-  }
-});
 
 app.get('/slot_count/:exam_id', async (req, res) => {
   const exam_id = req.params.exam_id;

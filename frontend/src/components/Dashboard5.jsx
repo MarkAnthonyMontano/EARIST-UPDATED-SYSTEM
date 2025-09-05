@@ -31,6 +31,8 @@ const Dashboard5 = (props) => {
     const storedUser = localStorage.getItem("email");
     const storedRole = localStorage.getItem("role");
     const storedID = localStorage.getItem("person_id");
+    const keys = JSON.parse(localStorage.getItem("dashboardKeys") || "{}");
+
 
     const overrideId = props?.adminOverridePersonId; // new
 
@@ -59,14 +61,14 @@ const Dashboard5 = (props) => {
 
 
 
-
+  const keys = JSON.parse(localStorage.getItem("dashboardKeys") || "{}");
 
   const steps = [
-    { label: "Personal Information", icon: <PersonIcon />, path: "/dashboard1" },
-    { label: "Family Background", icon: <FamilyRestroomIcon />, path: "/dashboard2" },
-    { label: "Educational Attainment", icon: <SchoolIcon />, path: "/dashboard3" },
-    { label: "Health Medical Records", icon: <HealthAndSafetyIcon />, path: "/dashboard4" },
-    { label: "Other Information", icon: <InfoIcon />, path: "/dashboard5" },
+    { label: "Personal Information", icon: <PersonIcon />, path: `/dashboard/${keys.step1}` },
+    { label: "Family Background", icon: <FamilyRestroomIcon />, path: `/dashboard/${keys.step2}` },
+    { label: "Educational Attainment", icon: <SchoolIcon />, path: `/dashboard/${keys.step3}` },
+    { label: "Health Medical Records", icon: <HealthAndSafetyIcon />, path: `/dashboard/${keys.step4}` },
+    { label: "Other Information", icon: <InfoIcon />, path: `/dashboard/${keys.step5 }` },
   ];
 
 
@@ -298,7 +300,7 @@ const Dashboard5 = (props) => {
         ))}
       </Box>
       <Container maxWidth="lg">
-        
+
         <Container>
           <h1 style={{ fontSize: "50px", fontWeight: "bold", textAlign: "center", color: "maroon", marginTop: "25px" }}>
             APPLICANT FORM
@@ -424,90 +426,91 @@ const Dashboard5 = (props) => {
             </FormControl>
 
 
+<Box display="flex" justifyContent="space-between" mt={4}>
+  {/* Previous Page Button */}
+  <Button
+    variant="contained"
+    onClick={() => navigate(`/dashboard/${keys.step4}`)} // ✅ FIXED to use step4 key
+    startIcon={
+      <ArrowBackIcon
+        sx={{
+          color: "#000",
+          transition: "color 0.3s",
+        }}
+      />
+    }
+    sx={{
+      backgroundColor: "#E8C999",
+      color: "#000",
+      "&:hover": {
+        backgroundColor: "#6D2323",
+        color: "#fff",
+        "& .MuiSvgIcon-root": {
+          color: "#fff",
+        },
+      },
+    }}
+  >
+    Previous Step
+  </Button>
 
-            <Box display="flex" justifyContent="space-between" mt={4}>
-              {/* Previous Page Button */}
-              <Button
-                variant="contained"
-                component={Link}
-                to="/dashboard4"
-                startIcon={
-                  <ArrowBackIcon
-                    sx={{
-                      color: '#000',
-                      transition: 'color 0.3s',
-                    }}
-                  />
-                }
-                sx={{
-                  backgroundColor: '#E8C999',
-                  color: '#000',
-                  '&:hover': {
-                    backgroundColor: '#6D2323',
-                    color: '#fff',
-                    '& .MuiSvgIcon-root': {
-                      color: '#fff',
-                    },
-                  },
-                }}
-              >
-                Previous Step
-              </Button>
-              {/* Next Step (Submit) Button */}
-              <Button
-                variant="contained"
-                onClick={async (e) => {
-                  handleUpdate(); // Save data
+  {/* Next Step (Submit) Button */}
+  <Button
+    variant="contained"
+    onClick={async () => {
+      handleUpdate(); // Save data
 
-                  if (isFormValid()) {
-                    try {
-                      await axios.post("http://localhost:5000/api/notify-submission", {
-                        person_id: userID,
-                      });
+      if (isFormValid()) {
+        try {
+          await axios.post("http://localhost:5000/api/notify-submission", {
+            person_id: userID,
+          });
 
-                      setSnack({
-                        open: true,
-                        message: "Your account has been successfully registered! Wait for further announcement. Please upload your documents.",
-                        severity: "success",
-                      });
+          // 🔑 Mark step5 as completed
+          localStorage.setItem("currentStep", "6");
 
-                      setTimeout(() => {
-                        navigate("/requirements_uploader");
-                      }, 2000);
-                    } catch (error) {
-                      console.error("Notification failed:", error);
-                    }
-                  } else {
-                    alert("Please complete all required fields before submitting.");
-                  }
-                }}
+          setSnack({
+            open: true,
+            message:
+              "Your account has been successfully registered! Wait for further announcement. Please upload your documents.",
+            severity: "success",
+          });
 
-
-                endIcon={
-                  <FolderIcon
-                    sx={{
-                      color: '#fff',
-                      transition: 'color 0.3s',
-                    }}
-                  />
-                }
-                sx={{
-                  backgroundColor: '#6D2323',
-                  color: '#fff',
-                  '&:hover': {
-                    backgroundColor: '#E8C999',
-                    color: '#000',
-                    '& .MuiSvgIcon-root': {
-                      color: '#000',
-                    },
-                  },
-                }}
-              >
-                Submit (Save Information)
-              </Button>
+          setTimeout(() => {
+            navigate("/requirements_uploader"); // ✅ goes to uploader after step5
+          }, 2000);
+        } catch (error) {
+          console.error("Notification failed:", error);
+        }
+      } else {
+        alert("Please complete all required fields before submitting.");
+      }
+    }}
+    endIcon={
+      <FolderIcon
+        sx={{
+          color: "#fff",
+          transition: "color 0.3s",
+        }}
+      />
+    }
+    sx={{
+      backgroundColor: "#6D2323",
+      color: "#fff",
+      "&:hover": {
+        backgroundColor: "#E8C999",
+        color: "#000",
+        "& .MuiSvgIcon-root": {
+          color: "#000",
+        },
+      },
+    }}
+  >
+    Submit (Save Information)
+  </Button>
+</Box>
 
 
-            </Box>
             <Snackbar
               open={snack.open}
               autoHideDuration={5000}

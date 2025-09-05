@@ -14,14 +14,84 @@ import {
     TableHead,
     TableRow,
     TableCell,
+    Dialog,
+    DialogTitle,
+    DialogContent,
+    Card,
+    DialogActions,
 } from '@mui/material';
 import { Search } from '@mui/icons-material';
 import { io } from "socket.io-client";
 import { Snackbar, Alert } from '@mui/material';
+import { Visibility, VisibilityOff } from "@mui/icons-material";
+import { IconButton, InputAdornment } from "@mui/material";
+import PersonIcon from "@mui/icons-material/Person";
+import DescriptionIcon from "@mui/icons-material/Description";
+import SchoolIcon from "@mui/icons-material/School";
+import CheckCircleIcon from "@mui/icons-material/CheckCircle";
+import LocalHospitalIcon from "@mui/icons-material/LocalHospital";
+import HowToRegIcon from "@mui/icons-material/HowToReg";
+import ListAltIcon from "@mui/icons-material/ListAlt";
+import { Link, useLocation, useNavigate } from "react-router-dom";
 
 const socket = io("http://localhost:5000");
 
 const StudentNumbering = () => {
+
+    const tabs = [
+        { label: "Applicant List", to: "/applicant_list", icon: <ListAltIcon /> },
+        { label: "Applicant Form", to: "/admin_dashboard1", icon: <PersonIcon /> },
+        { label: "Documents Submitted", to: "/student_requirements", icon: <DescriptionIcon /> },
+        { label: "Interview / Qualifiying Exam", to: "/interview", icon: <SchoolIcon /> },
+        { label: "College Approval", to: "/college_approval", icon: <CheckCircleIcon /> },
+        { label: "Medical Clearance", to: "/medical_clearance", icon: <LocalHospitalIcon /> },
+        { label: "Student Numbering", to: "/student_numbering", icon: <HowToRegIcon /> },
+    ];
+
+    const location = useLocation();
+    const navigate = useNavigate();
+
+
+    const handleStepClick = (index, to) => {
+        setActiveStep(index);
+        navigate(to); // this will actually change the page
+    };
+
+
+
+    const [authOpen, setAuthOpen] = useState(true);   // open when page loads
+    const [authPassword, setAuthPassword] = useState("");
+    const [authError, setAuthError] = useState("");
+    const [authPassed, setAuthPassed] = useState(false);
+    const [showAuthPassword, setShowAuthPassword] = useState(false);
+
+    const handleAuthSubmit = async () => {
+        if (!authPassword) {
+            setAuthError("Password is required.");
+            return;
+        }
+        try {
+            const personId = localStorage.getItem("person_id"); // from main login
+            const res = await axios.post("http://localhost:5000/api/verify-password", {
+                person_id: personId,
+                password: authPassword,
+            });
+
+            if (res.data.success) {
+                setAuthPassed(true);
+                setAuthOpen(false);
+            } else {
+                setAuthError("❌ Invalid password.");
+            }
+        } catch (err) {
+            setAuthError("Server error. Try again.");
+        }
+    };
+
+    const [activeStep, setActiveStep] = useState(6);
+    const [clickedSteps, setClickedSteps] = useState(Array(tabs.length).fill(false));
+    const [explicitSelection, setExplicitSelection] = useState(false);
+
     const [persons, setPersons] = useState([]);
     const [selectedPerson, setSelectedPerson] = useState(null);
     const [assignedNumber, setAssignedNumber] = useState('');
@@ -30,7 +100,15 @@ const StudentNumbering = () => {
 
     const [searchQuery, setSearchQuery] = useState("");
     const [currentPage, setCurrentPage] = useState(1);
-    const itemsPerPage = 10; // 🔧 adjustable
+
+    const [showPassword, setShowPassword] = useState(false);
+
+    // 🔑 For modal
+    const [openModal, setOpenModal] = useState(false);
+    const [password, setPassword] = useState("");
+
+
+    const itemsPerPage = 100; // 🔧 adjustable
 
     // ✅ Filtering persons by search
     const filteredPersons = persons.filter((p) =>
@@ -64,27 +142,105 @@ const StudentNumbering = () => {
         setError('');
     };
 
-    const handleAssignNumber = () => {
+    // 🔑 Step 1: Open confirmation modal
+    const openAssignModal = () => {
         if (!selectedPerson) return;
-
-        socket.emit("assign-student-number", selectedPerson.person_id);
-
-        socket.once("assign-student-number-result", (data) => {
-            if (data.success) {
-                setAssignedNumber(data.student_number);
-                setSnack({ open: true, message: "Student number assigned and email sent.", severity: "success" });
-                fetchPersons();
-                setSelectedPerson(null);
-            } else {
-                setSnack({ open: true, message: data.message || "❌ Failed to assign student number.", severity: "error" });
-            }
-        });
+        setPassword("");   // ✅ clears any previously typed password
+        setOpenModal(true);
     };
+
+    const [userEmail, setUserEmail] = useState("");
+
+    // fetch logged-in user email once (e.g. from localStorage or auth context)
+    useEffect(() => {
+        const storedEmail = localStorage.getItem("userEmail"); // adjust to your storage key
+        if (storedEmail) setUserEmail(storedEmail);
+    }, []);
+
+    const confirmAssignNumber = async () => {
+        try {
+            socket.emit("assign-student-number", selectedPerson.person_id);
+
+            socket.once("assign-student-number-result", (data) => {
+                if (data.success) {
+                    setAssignedNumber(data.student_number);
+                    setSnack({
+                        open: true,
+                        message: "✅ Student number assigned and email sent.",
+                        severity: "success",
+                    });
+                    fetchPersons();
+                    setSelectedPerson(null);
+                } else {
+                    setSnack({
+                        open: true,
+                        message: data.message || "❌ Failed to assign student number.",
+                        severity: "error",
+                    });
+                }
+            });
+        } catch (err) {
+            setError("Server error. Try again.");
+        }
+    };
+
+
 
     const handleSnackClose = (_, reason) => {
         if (reason === 'clickaway') return;
         setSnack(prev => ({ ...prev, open: false }));
     };
+
+    if (!authPassed) {
+        return (
+            <Dialog open={authOpen}>
+                <DialogTitle sx={{ color: "maroon", fontWeight: "bold" }}>
+                    Enter Password to Continue
+                </DialogTitle>
+                <DialogContent>
+                    <Typography mb={2}>
+                        ⚠️ This action <strong>cannot be undone</strong>. You are acknowledging
+                        this student as <strong>officially enrolled</strong>.
+                    </Typography>
+
+                    <TextField
+                        label="Password"
+                        type={showAuthPassword ? "text" : "password"}
+                        fullWidth
+                        value={authPassword}
+                        onChange={(e) => setAuthPassword(e.target.value)}
+                        autoComplete="new-password"
+                        InputProps={{
+                            endAdornment: (
+                                <InputAdornment position="end">
+                                    <IconButton
+                                        onClick={() => setShowAuthPassword(!showAuthPassword)}
+                                    >
+                                        {showAuthPassword ? <VisibilityOff /> : <Visibility />}
+                                    </IconButton>
+                                </InputAdornment>
+                            ),
+                        }}
+                    />
+
+                    {authError && (
+                        <Typography color="error" sx={{ mt: 1 }}>
+                            {authError}
+                        </Typography>
+                    )}
+                </DialogContent>
+                <DialogActions>
+                    <Button
+                        variant="contained"
+                        sx={{ backgroundColor: "maroon", color: "white" }}
+                        onClick={handleAuthSubmit}
+                    >
+                        Yes, I Confirm
+                    </Button>
+                </DialogActions>
+            </Dialog>
+        );
+    }
 
     return (
         <Box sx={{ height: 'calc(100vh - 150px)', overflowY: 'auto', pr: 1, p: 2 }}>
@@ -109,7 +265,75 @@ const StudentNumbering = () => {
                 />
             </Box>
             <hr style={{ border: "1px solid #ccc", width: "100%" }} />
-            <br/>
+
+            <Box
+                sx={{
+                    display: "flex",
+                    justifyContent: "space-between",
+                    alignItems: "center",
+                    width: "100%",
+                    mt: 2,
+                    flexWrap: "wrap", // so it wraps on smaller screens
+                }}
+            >
+                {tabs.map((tab, index) => (
+                    <React.Fragment key={index}>
+                        {/* Step Card */}
+                        <Card
+                            onClick={() => handleStepClick(index, tab.to)}
+                            sx={{
+                                flex: 1,
+                                maxWidth: `${100 / tabs.length}%`, // evenly fit in one row
+                                height: 100,
+                                display: "flex",
+                                alignItems: "center",
+                                justifyContent: "center",
+                                cursor: "pointer",
+                                borderRadius: 2,
+                                border: "2px solid #6D2323",
+
+                                backgroundColor: activeStep === index ? "#6D2323" : "#E8C999",
+                                color: activeStep === index ? "#fff" : "#000",
+                                boxShadow:
+                                    activeStep === index
+                                        ? "0px 4px 10px rgba(0,0,0,0.3)"
+                                        : "0px 2px 6px rgba(0,0,0,0.15)",
+                                transition: "0.3s ease",
+                                "&:hover": {
+                                    backgroundColor: activeStep === index ? "#5a1c1c" : "#f5d98f",
+                                },
+                            }}
+                        >
+                            <Box
+                                sx={{
+                                    display: "flex",
+                                    flexDirection: "column",
+                                    alignItems: "center",
+                                }}
+                            >
+                                <Box sx={{ fontSize: 32, mb: 0.5 }}>{tab.icon}</Box>
+                                <Typography
+                                    sx={{ fontSize: 14, fontWeight: "bold", textAlign: "center" }}
+                                >
+                                    {tab.label}
+                                </Typography>
+                            </Box>
+                        </Card>
+
+                        {/* Spacer instead of line */}
+                        {index < tabs.length - 1 && (
+                            <Box
+                                sx={{
+                                    flex: 0.1,
+                                    mx: 1, // keeps spacing between cards
+                                }}
+                            />
+                        )}
+                    </React.Fragment>
+                ))}
+            </Box>
+            <br />
+
 
             <TableContainer component={Paper} sx={{ width: '100%' }}>
                 <Table size="small">
@@ -126,8 +350,8 @@ const StudentNumbering = () => {
                             >
                                 <Box display="flex" justifyContent="space-between" alignItems="center" >
                                     {/* Left: Applicant List Count */}
-                                    <Typography fontSize="14px" fontWeight="bold" color="white" >
-                                        Applicant List:
+                                    <Typography fontSize="14px" fontWeight="bold" color="white">
+                                        Total Applicant's: {filteredPersons.length}
                                     </Typography>
 
                                     {/* Right: Pagination Controls */}
@@ -340,10 +564,11 @@ const StudentNumbering = () => {
                             <Button
                                 variant="contained"
                                 sx={{ mt: 2, backgroundColor: '#800000', color: 'white' }}
-                                onClick={handleAssignNumber}
+                                onClick={confirmAssignNumber}   // 👈 directly run the assign logic
                             >
                                 Assign Student Number
                             </Button>
+
                         </Box>
                     ) : (
                         <Typography>No person selected.</Typography>
@@ -362,6 +587,10 @@ const StudentNumbering = () => {
                     )}
                 </Box>
             </Box>
+
+
+
+
 
             <Snackbar
                 open={snack.open}

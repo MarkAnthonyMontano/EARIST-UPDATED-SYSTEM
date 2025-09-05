@@ -35,17 +35,16 @@ const tabs = [
     { label: "Applicant List", to: "/applicant_list", icon: <ListAltIcon /> },
     { label: "Applicant Form", to: "/admin_dashboard1", icon: <PersonIcon /> },
     { label: "Documents Submitted", to: "/student_requirements", icon: <DescriptionIcon /> },
-    { label: "Interview", to: "/interview", icon: <RecordVoiceOverIcon /> },
-    { label: "Qualifying Exam", to: "/qualifying_exam", icon: <SchoolIcon /> },
+    { label: "Interview / Qualifiying Exam", to: "/interview", icon: <SchoolIcon /> },
     { label: "College Approval", to: "/college_approval", icon: <CheckCircleIcon /> },
     { label: "Medical Clearance", to: "/medical_clearance", icon: <LocalHospitalIcon /> },
-    { label: "Applicant Status", to: "/applicant_status", icon: <HowToRegIcon /> },
+     { label: "Student Numbering", to: "/student_numbering", icon: <HowToRegIcon /> },
 ];
 
 const CollegeApproval = () => {
     const location = useLocation();
     const navigate = useNavigate();
-    const [activeStep, setActiveStep] = useState(5);
+    const [activeStep, setActiveStep] = useState(4);
     const [clickedSteps, setClickedSteps] = useState(Array(tabs.length).fill(false));
     const [explicitSelection, setExplicitSelection] = useState(false);
 
@@ -101,6 +100,7 @@ const CollegeApproval = () => {
     const [userID, setUserID] = useState("");
     const [user, setUser] = useState("");
     const [userRole, setUserRole] = useState("");
+
     const [person, setPerson] = useState({
         profile_img: "",
         program: "",
@@ -111,34 +111,106 @@ const CollegeApproval = () => {
     });
     const [editingRemarkId, setEditingRemarkId] = useState(null);
 
+    // Add this state for components
+    const [components, setComponents] = useState([
+        { name: "English", percentage: 0, score: 0 },
+        { name: "Science", percentage: 0, score: 0 },
+        { name: "Filipino", percentage: 0, score: 0 },
+        { name: "Math", percentage: 0, score: 0 },
+        { name: "Abstract", percentage: 0, score: 0 },
+    ]);
 
-    const fetchCollegeApproval = async (personID) => {
-        try {
-            const res = await axios.get(`http://localhost:5000/college_approval/${personID}`);
+// Fetch existing college approval by person_id
+const fetchCollegeApproval = async (personID) => {
+  try {
+    const res = await axios.get(`http://localhost:5000/college_approval/${personID}`);
+    if (res.data) {
+      setCollegeApprovalData(res.data);
 
-            if (res.data) {
-                setCollegeApprovalData(res.data);
-            }
-        } catch (err) {
-            console.error("❌ Failed to fetch college approval:", err);
-        }
+      // Map backend fields → components array
+      setComponents([
+        { name: "English", percentage: res.data.english_percentage || 0, score: res.data.english_score || 0 },
+        { name: "Science", percentage: res.data.science_percentage || 0, score: res.data.science_score || 0 },
+        { name: "Filipino", percentage: res.data.filipino_percentage || 0, score: res.data.filipino_score || 0 },
+        { name: "Math", percentage: res.data.math_percentage || 0, score: res.data.math_score || 0 },
+        { name: "Abstract", percentage: res.data.abstract_percentage || 0, score: res.data.abstract_score || 0 },
+      ]);
+    }
+  } catch (err) {
+    console.error("❌ Failed to fetch college approval:", err);
+  }
+};
+
+   // Save (insert or update)
+const handleSaveApproval = async () => {
+  if (!selectedPerson?.person_id) {
+    alert("⚠ No applicant selected!");
+    return;
+  }
+
+  try {
+    const payload = {
+      person_id: selectedPerson.person_id,
+      english_percentage: components.find(c => c.name === "English")?.percentage || 0,
+      english_score: components.find(c => c.name === "English")?.score || 0,
+      science_percentage: components.find(c => c.name === "Science")?.percentage || 0,
+      science_score: components.find(c => c.name === "Science")?.score || 0,
+      filipino_percentage: components.find(c => c.name === "Filipino")?.percentage || 0,
+      filipino_score: components.find(c => c.name === "Filipino")?.score || 0,
+      math_percentage: components.find(c => c.name === "Math")?.percentage || 0,
+      math_score: components.find(c => c.name === "Math")?.score || 0,
+      abstract_percentage: components.find(c => c.name === "Abstract")?.percentage || 0,
+      abstract_score: components.find(c => c.name === "Abstract")?.score || 0,
+      percentage_score: components.reduce((sum, c) => sum + Number(c.percentage || 0), 0),
+      total: components.reduce((sum, c) => sum + Number(c.score || 0), 0),
+      status: collegeApprovalData.status || "",
+      custom_status: collegeApprovalData.custom_status || null,
     };
 
-    // handle save
-    const handleSaveApproval = async () => {
-        try {
-            await axios.post("http://localhost:5000/college_approval", {
-                person_id: selectedPerson?.person_id,
-                percentage_score: collegeApprovalData.percentage_score,
-                total: collegeApprovalData.total,
-                status: collegeApprovalData.status,
-                custom_status: collegeApprovalData.custom_status,
-            });
-            alert("✅ College Approval saved!");
-        } catch (err) {
-            console.error("❌ Failed to save college approval:", err);
-            alert("Error saving college approval.");
-        }
+    await axios.post("http://localhost:5000/college_approval", payload);
+    alert("✅ College Approval saved!");
+  } catch (err) {
+    console.error("❌ Failed to save college approval:", err);
+    alert("Error saving college approval.");
+  }
+};
+
+
+    useEffect(() => {
+        const totalPercentage = components.reduce((sum, c) => sum + Number(c.percentage || 0), 0);
+        const weightedTotal = components.reduce(
+            (sum, c) => sum + ((Number(c.score) || 0) * (Number(c.percentage) || 0)) / 100,
+            0
+        );
+
+        setCollegeApprovalData((prev) => ({
+            ...prev,
+            percentage_score: totalPercentage,
+            total: weightedTotal,
+        }));
+    }, [components]);
+
+
+
+    // Auto compute totals when components change
+    useEffect(() => {
+        const totalPercentage = components.reduce((sum, c) => sum + Number(c.percentage || 0), 0);
+        const totalScore = components.reduce((sum, c) => sum + Number(c.score || 0), 0);
+
+        setCollegeApprovalData((prev) => ({
+            ...prev,
+            percentage_score: totalPercentage,
+            total: totalScore,
+        }));
+    }, [components]);
+
+    // Update handler
+    const handleComponentChange = (index, field, value) => {
+        setComponents((prev) =>
+            prev.map((c, i) =>
+                i === index ? { ...c, [field]: Number(value) } : c
+            )
+        );
     };
 
 
@@ -228,10 +300,13 @@ const CollegeApproval = () => {
     const [collegeApprovalData, setCollegeApprovalData] = useState({
         person_id: person?.id ?? "",
         percentage_score: "",
+        score: "",
         total: "",
         status: "",
         custom_status: "",
+        remarks: "",
     });
+
 
     const handleCollegeApprovalChange = (e) => {
         const { name, value } = e.target;
@@ -255,7 +330,7 @@ const CollegeApproval = () => {
 
             const safePerson = {
                 ...res.data,
-                document_status: res.data.document_status || "On process", // set default here
+                document_status: res.data.document_status || "", // set default here
             };
             setPerson(safePerson);
             setSelectedPerson(res.data);
@@ -549,7 +624,7 @@ const CollegeApproval = () => {
                                     }))
                                 }
                                 fullWidth
-                                style={{width: "750px"}}
+                                style={{ width: "750px" }}
                                 size="small"
                                 SelectProps={{ readOnly: true }}
                             >
@@ -593,41 +668,90 @@ const CollegeApproval = () => {
                         <Table sx={{ border: "2px solid maroon", width: "95%" }}>
                             <TableHead sx={{ backgroundColor: "#6D2323" }}>
                                 <TableRow>
-                                    <TableCell sx={{ color: "white", textAlign: "center", width: "20%" }}>COMPONENTS</TableCell>
-                                    <TableCell sx={{ color: "white", textAlign: "center", width: "20%" }}>PERCENTAGE</TableCell>
-                                    <TableCell sx={{ color: "white", textAlign: "center", width: "20%" }}>SCORE</TableCell>
-                                    <TableCell sx={{ color: "white", textAlign: "center", width: "15%" }}>TOTAL</TableCell>
+                                    <TableCell sx={{ color: "white", textAlign: "center", width: "20%" }}>
+                                        COMPONENTS
+                                    </TableCell>
+                                    <TableCell sx={{ color: "white", textAlign: "center", width: "20%" }}>
+                                        PERCENTAGE
+                                    </TableCell>
+                                    <TableCell sx={{ color: "white", textAlign: "center", width: "20%" }}>
+                                        SCORE
+                                    </TableCell>
+                                    <TableCell sx={{ color: "white", textAlign: "center", width: "15%" }}>
+                                        TOTAL
+                                    </TableCell>
                                 </TableRow>
                             </TableHead>
                             <TableBody>
+                                {components.map((comp, index) => (
+                                    <TableRow key={comp.name}>
+                                        <TableCell sx={{ border: "1px solid maroon" }}>{comp.name}</TableCell>
+
+                                        {/* Percentage */}
+                                        <TableCell sx={{ border: "1px solid maroon" }}>
+                                            <TextField
+                                                fullWidth
+                                                variant="outlined"
+                                                size="small"
+                                                type="number"
+                                                value={comp.percentage}
+                                                onChange={(e) =>
+                                                    handleComponentChange(index, "percentage", e.target.value)
+                                                }
+                                            />
+                                        </TableCell>
+
+                                        {/* Score */}
+                                        <TableCell sx={{ border: "1px solid maroon" }}>
+                                            <TextField
+                                                fullWidth
+                                                variant="outlined"
+                                                size="small"
+                                                type="number"
+                                                value={comp.score}
+                                                onChange={(e) =>
+                                                    handleComponentChange(index, "score", e.target.value)
+                                                }
+                                            />
+                                        </TableCell>
+
+                                        {/* Row Total */}
+                                        <TableCell sx={{ border: "1px solid maroon", textAlign: "center" }}>
+                                            {Number(comp.percentage || 0) + Number(comp.score || 0)}
+                                        </TableCell>
+                                    </TableRow>
+                                ))}
+
+                                {/* Grand Total Row */}
                                 <TableRow>
-                                    <TableCell sx={{ border: "1px solid maroon" }}></TableCell>
-                                    <TableCell sx={{ border: "1px solid maroon" }}>
-                                        <TextField fullWidth variant="outlined" size="small" />
+                                    <TableCell sx={{ fontWeight: "bold", border: "1px solid maroon" }}>
+                                        FINAL RATING
                                     </TableCell>
-                                    <TableCell sx={{ border: "1px solid maroon" }}>
-                                        <TextField fullWidth variant="outlined" size="small" />
+
+                                    {/* Sum of percentages */}
+                                    <TableCell sx={{ border: "1px solid maroon", textAlign: "center" }}>
+                                        {components.reduce((sum, c) => sum + Number(c.percentage || 0), 0)}
                                     </TableCell>
-                                    <TableCell sx={{ border: "1px solid maroon" }}>
-                                        <TextField fullWidth variant="outlined" size="small" />
+
+                                    {/* Sum of raw scores */}
+                                    <TableCell sx={{ border: "1px solid maroon", textAlign: "center" }}>
+                                        {components.reduce((sum, c) => sum + Number(c.score || 0), 0)}
+                                    </TableCell>
+
+                                    {/* Weighted final total */}
+                                    <TableCell sx={{ border: "1px solid maroon", textAlign: "center" }}>
+                                        {components.reduce(
+                                            (sum, c) => sum + ((Number(c.score) || 0) * (Number(c.percentage) || 0)) / 100,
+                                            0
+                                        ).toFixed(2)}
                                     </TableCell>
                                 </TableRow>
 
-                                <TableRow>
-                                    <TableCell sx={{ border: "1px solid maroon" }}></TableCell>
-                                    <TableCell sx={{ border: "1px solid maroon" }}>
-                                        <TextField fullWidth variant="outlined" size="small" />
-                                    </TableCell>
-                                    <TableCell sx={{ border: "1px solid maroon" }}>
-                                        <TextField fullWidth variant="outlined" size="small" />
-                                    </TableCell>
-                                    <TableCell sx={{ border: "1px solid maroon" }}>
-                                        <TextField fullWidth variant="outlined" size="small" />
-                                    </TableCell>
-                                </TableRow>
+
                             </TableBody>
                         </Table>
                     </Box>
+
 
                     {/* Status Section (left aligned) */}
                     <Box sx={{ display: "flex", alignItems: "center", gap: 2, p: 2 }}>

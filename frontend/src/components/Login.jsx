@@ -44,7 +44,7 @@ const Login = ({ setIsAuthenticated }) => {
       setIsAuthenticated(true);
       setSnack({ open: true, message: "Login Successfully", severity: "success" });
 
-     navigate("/applicant_dashboard");
+      navigate("/applicant_dashboard");
     } catch (error) {
       setSnack({
         open: true,
@@ -53,8 +53,6 @@ const Login = ({ setIsAuthenticated }) => {
       });
     }
   };
-
-  
 
   const handleClose = (_, reason) => {
     if (reason === 'clickaway') return;
@@ -104,6 +102,11 @@ const Login = ({ setIsAuthenticated }) => {
                   className="border"
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") {
+                      handleLogin(); // ✅ Trigger login on Enter
+                    }
+                  }}
                   style={{ paddingLeft: "2.5rem" }}
                 />
                 <EmailIcon
@@ -125,6 +128,11 @@ const Login = ({ setIsAuthenticated }) => {
                   placeholder="Enter your password"
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") {
+                      handleLogin(); 
+                    }
+                  }}
                   className="border"
                   style={{ paddingLeft: "2.5rem" }}
                 />
@@ -163,10 +171,9 @@ const Login = ({ setIsAuthenticated }) => {
                 <span>Log In</span>
               </div>
 
-             <div className="LinkContainer">
+              <div className="LinkContainer">
                 <span><Link to="/applicant_forgot_password">Forgot your password</Link></span>
               </div>
-
 
               <div className="LinkContainer RegistrationLink" style={{ margin: '0.1rem 0rem' }}>
                 <p>Doesn't Have an Account?</p>

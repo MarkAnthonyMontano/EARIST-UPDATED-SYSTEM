@@ -22,25 +22,10 @@ import { Search } from '@mui/icons-material';
 import { io } from "socket.io-client";
 import { Snackbar, Alert } from '@mui/material';
 import { useNavigate, useLocation } from "react-router-dom";
-import NotificationsIcon from '@mui/icons-material/Notifications';
 import { FcPrint } from "react-icons/fc";
 import EaristLogo from "../assets/EaristLogo.png";
 import { Link } from "react-router-dom";
-import PersonIcon from "@mui/icons-material/Person";
-import DescriptionIcon from "@mui/icons-material/Description";
-import AssignmentIcon from "@mui/icons-material/Assignment";
-import RecordVoiceOverIcon from "@mui/icons-material/RecordVoiceOver";
-import SchoolIcon from "@mui/icons-material/School";
-import CheckCircleIcon from "@mui/icons-material/CheckCircle";
-import LocalHospitalIcon from "@mui/icons-material/LocalHospital";
-import HowToRegIcon from "@mui/icons-material/HowToReg";
-import ListAltIcon from "@mui/icons-material/ListAlt";
-import { Stepper, Step, StepLabel } from "@mui/material";
 import { FaFileExcel } from "react-icons/fa";
-
-
-
-const socket = io("http://localhost:5000");
 
 const ApplicantList = () => {
     const location = useLocation();
@@ -65,7 +50,8 @@ const ApplicantList = () => {
         { label: "Room Scheduling", to: "/assign_entrance_exam" },
         { label: "Applicant's Scheduling", to: "/assign_schedule_applicant" },
         { label: "Examination Profile", to: "/examination_profile" },
-        { label: "Applicant's Score", to: "/applicant_scoring" },
+        { label: "Entrance Examation Scores", to: "/applicant_scoring" },
+        { label: "Qualifying Examination Scores", to: "/qualifying_exam_scores" },
         { label: "Proctor's Applicant List", to: "/proctor_applicant_list" },
     ];
     const navigate = useNavigate();
@@ -365,30 +351,6 @@ const ApplicantList = () => {
         }
     }, [filteredPersons.length, totalPages]);
 
-    const [notifications, setNotifications] = useState([]);
-    const [showNotifications, setShowNotifications] = useState(false);
-
-    useEffect(() => {
-        // Load saved notifications from DB on first load
-        axios.get("http://localhost:5000/api/notifications")
-            .then(res => {
-                setNotifications(res.data.map(n => ({
-                    ...n,
-                    timestamp: n.timestamp
-                })));
-            })
-            .catch(err => console.error("Failed to load saved notifications:", err));
-    }, []);
-
-
-    useEffect(() => {
-        const socket = io("http://localhost:5000");
-        socket.on("notification", (data) => {
-            setNotifications((prev) => [data, ...prev]);
-        });
-        return () => socket.disconnect();
-    }, []);
-
 
     const handleSnackClose = (_, reason) => {
         if (reason === 'clickaway') return;
@@ -416,6 +378,8 @@ const ApplicantList = () => {
         }
         setSelectedProgramFilter("");
     };
+
+
 
 
     const [applicants, setApplicants] = useState([]);
@@ -536,7 +500,8 @@ th.name-col {
             const filipino = Number(person.filipino) || 0;
             const math = Number(person.math) || 0;
             const abstract = Number(person.abstract) || 0;
-            const computedFinalRating = english + science + filipino + math + abstract;
+            const computedFinalRating = (english + science + filipino + math + abstract) / 5;
+
 
             return `
                   <tr>
@@ -633,11 +598,13 @@ th.name-col {
                 applicant_number: person.applicant_number,
                 ...updatedScores,
                 final_rating:
-                    Number(updatedScores.english || 0) +
-                    Number(updatedScores.science || 0) +
-                    Number(updatedScores.filipino || 0) +
-                    Number(updatedScores.math || 0) +
-                    Number(updatedScores.abstract || 0),
+                    (
+                        Number(updatedScores.english || 0) +
+                        Number(updatedScores.science || 0) +
+                        Number(updatedScores.filipino || 0) +
+                        Number(updatedScores.math || 0) +
+                        Number(updatedScores.abstract || 0)
+                    ) / 5,
                 user: localStorage.getItem("email"), // ✅ Always send email
             };
 
@@ -656,53 +623,9 @@ th.name-col {
         <Box sx={{ height: 'calc(100vh - 150px)', overflowY: 'auto', pr: 1, p: 2 }}>
             <Box display="flex" justifyContent="space-between" alignItems="center" mb={2}>
                 <Typography variant="h4" fontWeight="bold" color="maroon">
-                    APPLICANT SCORING
+                    ENTRANCE EXAMINATION SCORING
                 </Typography>
-                <Box sx={{ position: 'absolute', top: 10, right: 24 }}>
-                    <Button
-                        sx={{ width: 65, height: 65, borderRadius: '50%', '&:hover': { backgroundColor: '#E8C999' } }}
-                        onClick={() => setShowNotifications(!showNotifications)}
-                    >
-                        <NotificationsIcon sx={{ fontSize: 50, color: 'white' }} />
-                        {notifications.length > 0 && (
-                            <Box sx={{
-                                position: 'absolute', top: 5, right: 5,
-                                background: 'red', color: 'white',
-                                borderRadius: '50%', width: 20, height: 20,
-                                display: 'flex', justifyContent: 'center', alignItems: 'center',
-                                fontSize: '12px'
-                            }}>
-                                {notifications.length}
-                            </Box>
-                        )}
-                    </Button>
 
-                    {showNotifications && (
-                        <Paper sx={{
-                            position: 'absolute',
-                            top: 70, right: 0,
-                            width: 300, maxHeight: 400,
-                            overflowY: 'auto',
-                            bgcolor: 'white',
-                            boxShadow: 3,
-                            zIndex: 10,
-                            borderRadius: 1
-                        }}>
-                            {notifications.length === 0 ? (
-                                <Typography sx={{ p: 2 }}>No notifications</Typography>
-                            ) : (
-                                notifications.map((notif, idx) => (
-                                    <Box key={idx} sx={{ p: 1, borderBottom: '1px solid #ccc' }}>
-                                        <Typography sx={{ fontSize: '14px' }}>{notif.message}</Typography>
-                                        <Typography sx={{ fontSize: '10px', color: '#888' }}>
-                                            {new Date(notif.timestamp).toLocaleString('en-PH', { timeZone: 'Asia/Manila' })}
-                                        </Typography>
-                                    </Box>
-                                ))
-                            )}
-                        </Paper>
-                    )}
-                </Box>
 
                 <Box>
 
@@ -729,35 +652,42 @@ th.name-col {
             <div style={{ height: "20px" }}></div>
 
             <Box display="flex" sx={{ border: "2px solid maroon", borderRadius: "4px", overflow: "hidden" }}>
-                {tabs.map((tab, index) => (
-                    <Link
-                        key={index}
-                        to={tab.to}
-                        style={{ textDecoration: "none", flex: 1 }}
-                    >
-                        <Box
-                            sx={{
-                                backgroundColor: "#6D2323",
-                                padding: "16px",
-                                color: "#ffffff",
-                                textAlign: "center",
-                                cursor: "pointer",
-                                borderRight: index !== tabs.length - 1 ? "2px solid white" : "none", // changed here
-                                transition: "all 0.3s ease",
-                                "&:hover": {
-                                    backgroundColor: "#f9f9f9",
-                                    color: "#6D2323", // font color on hover
-                                },
-                            }}
-                        >
-                            <Typography sx={{ color: "inherit", fontWeight: "bold", wordBreak: "break-word" }}>
-                                {tab.label}
-                            </Typography>
-                        </Box>
-                    </Link>
-                ))}
-            </Box>
+                {tabs.map((tab, index) => {
+                    const isActive = location.pathname === tab.to;
 
+                    return (
+                        <Link
+                            key={index}
+                            to={tab.to}
+                            style={{ textDecoration: "none", flex: 1 }}
+                        >
+                            <Box
+                                sx={{
+                                    backgroundColor: isActive ? "#6D2323" : "#E8C999",  // ✅ active vs default
+                                    padding: "16px",
+                                    color: isActive ? "#ffffff" : "#000000",            // ✅ text color contrast
+                                    textAlign: "center",
+                                    height: "75px",
+                                    display: "flex",
+                                    alignItems: "center",
+                                    justifyContent: "center",
+                                    cursor: "pointer",
+                                    borderRight: index !== tabs.length - 1 ? "2px solid white" : "none",
+                                    transition: "all 0.3s ease",
+                                    "&:hover": {
+                                        backgroundColor: isActive ? "#6D2323" : "#f9f9f9",
+                                        color: isActive ? "#ffffff" : "#6D2323",
+                                    },
+                                }}
+                            >
+                                <Typography sx={{ color: "inherit", fontWeight: "bold", wordBreak: "break-word" }}>
+                                    {tab.label}
+                                </Typography>
+                            </Box>
+                        </Link>
+                    );
+                })}
+            </Box>
             <div style={{ height: "20px" }}></div>
 
 
@@ -765,7 +695,7 @@ th.name-col {
                 <Table>
                     <TableHead sx={{ backgroundColor: '#6D2323' }}>
                         <TableRow>
-                            <TableCell sx={{ color: 'white', textAlign: "Center" }}>Applicant's Score</TableCell>
+                            <TableCell sx={{ color: 'white', textAlign: "Center" }}>Entrance Examination Score</TableCell>
                         </TableRow>
                     </TableHead>
                 </Table>
@@ -807,7 +737,7 @@ th.name-col {
                                     alignItems: "center",
                                     gap: "8px",
                                     userSelect: "none",
-                                    width: "200px", // ✅ same width as Import
+                                    width: "275px", // ✅ same width as Import
                                 }}
                                 onMouseEnter={(e) => e.currentTarget.style.backgroundColor = "#d3d3d3"}
                                 onMouseLeave={(e) => e.currentTarget.style.backgroundColor = "#f0f0f0"}
@@ -816,7 +746,7 @@ th.name-col {
                                 type="button"
                             >
                                 <FcPrint size={20} />
-                                Print Applicant List
+                                Print Entrance Examination Scores
                             </button>
                         </Box>
 
@@ -1289,11 +1219,14 @@ th.name-col {
                             const abstract = Number(person.abstract) || 0;
 
                             const computedFinalRating =
-                                (editScores[person.person_id]?.english ?? english) +
-                                (editScores[person.person_id]?.science ?? science) +
-                                (editScores[person.person_id]?.filipino ?? filipino) +
-                                (editScores[person.person_id]?.math ?? math) +
-                                (editScores[person.person_id]?.abstract ?? abstract);
+                                (
+                                    (editScores[person.person_id]?.english ?? english) +
+                                    (editScores[person.person_id]?.science ?? science) +
+                                    (editScores[person.person_id]?.filipino ?? filipino) +
+                                    (editScores[person.person_id]?.math ?? math) +
+                                    (editScores[person.person_id]?.abstract ?? abstract)
+                                ) / 5;
+
 
                             return (
                                 <TableRow key={person.person_id}>
@@ -1426,7 +1359,7 @@ th.name-col {
                                             textAlign: "center",
                                             border: "1px solid maroon",
                                             py: 0.5,
-                                            fontSize: "12px",
+                                            fontSize: "15px",
                                         }}
                                     >
                                         {computedFinalRating}

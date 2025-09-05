@@ -143,18 +143,25 @@ const SideBar = ({ setIsAuthenticated }) => {
               </li>
             </Link>
 
-            <Link to="/dashboard1">
-              <li className={`w-full flex items-center border border-maroon-500 px-2 rounded m-2 mx-0 button-hover 
-    ${location.pathname.startsWith("/dashboard1") ? "bg-maroon-500 text-white" : ""}`}>
-                <AssignmentIndIcon />
-                <span className='pl-4 p-2 px-0 pointer-events-none'>Applicant Form</span>
-              </li>
-            </Link>
+            {(() => {
+              const keys = JSON.parse(localStorage.getItem("dashboardKeys") || "{}");
+              return (
+                <Link to={keys.step1 ? `/dashboard/${keys.step1}` : "/applicant_dashboard"}>
+                  <li className={`w-full flex items-center border border-maroon-500 px-2 rounded m-2 mx-0 button-hover 
+      ${location.pathname.startsWith(`/dashboard/${keys.step1}`) ? "bg-maroon-500 text-white" : ""}`}>
+                    <AssignmentIndIcon />
+                    <span className='pl-4 p-2 px-0 pointer-events-none'>Applicant Form</span>
+                  </li>
+                </Link>
+              );
+            })()}
 
-            <Link to="/requirements_uploader">
+
+            <Link  to="/requirements_uploader">
               <li className={`w-full flex items-center border border-maroon-500 px-2 rounded m-2 mx-0 button-hover 
     ${location.pathname.startsWith("/requirements_uploader") ? "bg-maroon-500 text-white" : ""}`}>
                 <CloudUploadIcon />
+              
                 <span className='pl-4 p-2 px-0 pointer-events-none'>Upload Requirements</span>
               </li>
             </Link>

@@ -237,7 +237,7 @@ const ApplicantDashboard = () => {
               <Typography variant="subtitle2" color="text.secondary">
                 Application Status
               </Typography>
-              <Typography fontWeight={500}>
+              <Typography style={{color: "maroon", fontWeight: "bold"}} >
                 {allRequirementsCompleted
                   ? "Your application is registered."
                   : "Please complete all required documents to register your application."}
@@ -245,6 +245,63 @@ const ApplicantDashboard = () => {
             </CardContent>
           </Card>
         </Grid>
+
+        <Grid item xs={12}>
+  <Card
+    sx={{
+      borderRadius: 3,
+      marginLeft: "10px",
+      boxShadow: 3,
+      p: 2,
+      display: "flex",
+      justifyContent: "center",
+      alignItems: "center",
+    }}
+  >
+    <CardContent sx={{ textAlign: "center" }}>
+      <Typography variant="h6" gutterBottom>
+        Application Form
+      </Typography>
+      <button
+        style={{
+          padding: "10px 20px",
+          backgroundColor: "maroon",
+          color: "white",
+          border: "none",
+          borderRadius: "8px",
+          cursor: "pointer",
+          marginTop: "10px",
+        }}
+        onClick={() => {
+          // 🔑 generate random keys if not already set
+          if (!localStorage.getItem("dashboardKeys")) {
+            const generateKey = () =>
+              Math.random().toString(36).substring(2, 10);
+
+            const dashboardKeys = {
+              step1: generateKey(),
+              step2: generateKey(),
+              step3: generateKey(),
+              step4: generateKey(),
+              step5: generateKey(),
+            };
+
+            localStorage.setItem(
+              "dashboardKeys",
+              JSON.stringify(dashboardKeys)
+            );
+          }
+
+          const keys = JSON.parse(localStorage.getItem("dashboardKeys"));
+          window.location.href = `/dashboard/${keys.step1}`;
+        }}
+      >
+        Start Application
+      </button>
+    </CardContent>
+  </Card>
+</Grid>
+
 
 
         <Grid item xs={12} md={4}>
@@ -383,7 +440,7 @@ const ApplicantDashboard = () => {
             <CardContent sx={{ textAlign: "center" }}>
               <EventIcon sx={{ color: "maroon" }} fontSize="large" />
               <Typography variant="h6" gutterBottom sx={{ mt: 1 }}>
-                Interview Schedule
+                Interview Schedule / Qualifying Exam 
               </Typography>
               <Typography variant="body2" sx={{ fontWeight: "bold", color: "gray" }}>
                 Status: Pending
@@ -392,36 +449,6 @@ const ApplicantDashboard = () => {
           </Card>
         </Grid>
 
-        <Grid item xs={12} md={4}>
-          <Card
-            sx={{
-              borderRadius: 3,
-              boxShadow: 3,
-              p: 2,
-              minHeight: 220,
-              display: "flex",
-              marginLeft: "10px",
-              flexDirection: "column",
-              justifyContent: "center",
-              alignItems: "center",
-              transition: "transform 0.3s ease, box-shadow 0.3s ease",
-              "&:hover": {
-                transform: "scale(1.05)",
-                boxShadow: 6,
-              },
-            }}
-          >
-            <CardContent sx={{ textAlign: "center" }}>
-              <SchoolIcon sx={{ color: "maroon" }} fontSize="large" />
-              <Typography variant="h6" gutterBottom sx={{ mt: 1 }}>
-                Qualifying Exam / Aptitude Test
-              </Typography>
-              <Typography variant="body2" sx={{ fontWeight: "bold", color: "gray" }}>
-                Status: Pending
-              </Typography>
-            </CardContent>
-          </Card>
-        </Grid>
 
         <Grid item xs={12} md={4}>
           <Card

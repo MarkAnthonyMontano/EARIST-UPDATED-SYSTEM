@@ -24,7 +24,8 @@ const ProctorApplicantList = () => {
     { label: "Room Scheduling", to: "/assign_entrance_exam" },
     { label: "Applicant's Scheduling", to: "/assign_schedule_applicant" },
     { label: "Examination Profile", to: "/examination_profile" },
-    { label: "Applicant's Score", to: "/applicant_scoring" },
+    { label: "Entrance Examation Scores", to: "/applicant_scoring" },
+    { label: "Qualifying Examination", to: "/qualifying_exam_scores" },
     { label: "Proctor's Applicant List", to: "/proctor_applicant_list" },
   ];
   const navigate = useNavigate();
@@ -153,22 +154,31 @@ th {
               </div>
             </div>
 
-            <!-- Proctor Info -->
- <div style="margin-top: 20px; text-align: left; width: 100%; display: flex; gap: 20px; flex-wrap: wrap;">
-  <span><b>Proctor:</b> ${proctor?.proctor || "N/A"}</span>
-  <span><b>Room:</b> ${proctor?.room_description || "N/A"}</span>
-  <span><b>Schedule:</b> 
-    ${proctor?.day_description || ""} | 
-    ${proctor?.start_time
+         <!-- Proctor Info -->
+<div style="margin-top: 20px; width: 100%; display: flex; flex-direction: column; gap: 8px;">
+
+  <!-- Row 1 -->
+  <div style="display: flex; justify-content: space-between; width: 100%;">
+    <span><b>Proctor:</b> ${proctor?.proctor || "N/A"}</span>
+    <span><b>Building:</b> ${proctor?.room_description || "N/A"}</span>
+  </div>
+
+  <!-- Row 2 -->
+  <div style="display: flex; justify-content: space-between; width: 100%;">
+    <span><b>Room:</b> ${proctor?.room_no || "N/A"}</span>
+    <span><b>Schedule:</b> 
+      ${proctor?.day_description || ""} | 
+      ${proctor?.start_time
         ? new Date(`1970-01-01T${proctor.start_time}`).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit", hour12: true })
         : ""} 
-    - 
-    ${proctor?.end_time
+      - 
+      ${proctor?.end_time
         ? new Date(`1970-01-01T${proctor.end_time}`).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit", hour12: true })
         : ""}
-  </span>
-</div>
+    </span>
+  </div>
 
+</div>
 
             <!-- Table -->
            <table>
@@ -229,7 +239,7 @@ th {
 
 
   return (
-    <Box sx={{ height: 'calc(100vh - 150px)', overflowY: 'auto', pr: 1,  }}>
+    <Box sx={{ height: 'calc(100vh - 150px)', overflowY: 'auto', pr: 1, }}>
       {/* Header with Search aligned right */}
       <Box
         sx={{
@@ -271,8 +281,7 @@ th {
       </Box>
 
       <hr style={{ border: "1px solid #ccc", width: "100%" }} />
-      <br />
-
+    
       {applicants.length > 0 && (
         <Button
           onClick={printDiv}
@@ -306,35 +315,43 @@ th {
       )}
       <br />
 
-      <Box display="flex" sx={{ border: "2px solid maroon", borderRadius: "4px", overflow: "hidden" }}>
-        {tabs.map((tab, index) => (
-          <Link
-            key={index}
-            to={tab.to}
-            style={{ textDecoration: "none", flex: 1 }}
-          >
-            <Box
-              sx={{
-                backgroundColor: "#6D2323",
-                padding: "16px",
-                color: "#ffffff",
-                textAlign: "center",
-                cursor: "pointer",
-                borderRight: index !== tabs.length - 1 ? "2px solid white" : "none", // changed here
-                transition: "all 0.3s ease",
-                "&:hover": {
-                  backgroundColor: "#f9f9f9",
-                  color: "#6D2323", // font color on hover
-                },
-              }}
-            >
-              <Typography sx={{ color: "inherit", fontWeight: "bold", wordBreak: "break-word" }}>
-                {tab.label}
-              </Typography>
-            </Box>
-          </Link>
-        ))}
-      </Box>
+     <Box display="flex" sx={{ border: "2px solid maroon", borderRadius: "4px", overflow: "hidden" }}>
+  {tabs.map((tab, index) => {
+    const isActive = location.pathname === tab.to;
+
+    return (
+      <Link
+        key={index}
+        to={tab.to}
+        style={{ textDecoration: "none", flex: 1 }}
+      >
+        <Box
+          sx={{
+            backgroundColor: isActive ? "#6D2323" : "#E8C999",  // ✅ active vs default
+            padding: "16px",
+            color: isActive ? "#ffffff" : "#000000",            // ✅ text color contrast
+            textAlign: "center",
+            height: "75px",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            cursor: "pointer",
+            borderRight: index !== tabs.length - 1 ? "2px solid white" : "none",
+            transition: "all 0.3s ease",
+            "&:hover": {
+              backgroundColor: isActive ? "#6D2323" : "#f9f9f9",
+              color: isActive ? "#ffffff" : "#6D2323",
+            },
+          }}
+        >
+          <Typography sx={{ color: "inherit", fontWeight: "bold", wordBreak: "break-word" }}>
+            {tab.label}
+          </Typography>
+        </Box>
+      </Link>
+    );
+  })}
+</Box>
 
       <br />
       {proctor && (
@@ -349,7 +366,8 @@ th {
           }}
         >
           <span><b>Proctor:</b> {proctor.proctor || "N/A"}</span>
-          <span><b>Room:</b> {proctor.room_description || "N/A"}</span>
+          <span><b>Building:</b> {proctor.room_description || "N/A"}</span>
+          <span><b>Room:</b> {proctor.room_no || "N/A"}</span>
           <span>
             <b>Schedule:</b> {proctor.day_description || ""} |{" "}
             {proctor.start_time
@@ -381,9 +399,11 @@ th {
                 <TableCell sx={{ color: "white", textAlign: "center", border: "2px solid maroon" }}>Applicant</TableCell>
                 <TableCell sx={{ color: "white", textAlign: "center", border: "2px solid maroon" }}>Name</TableCell>
                 <TableCell sx={{ color: "white", textAlign: "center", border: "2px solid maroon" }}>Program</TableCell>
+                <TableCell sx={{ color: "white", textAlign: "center", border: "2px solid maroon" }}>Room</TableCell> {/* ✅ NEW */}
                 <TableCell sx={{ color: "white", textAlign: "center", border: "2px solid maroon" }}>Email Sent</TableCell>
               </TableRow>
             </TableHead>
+
             <TableBody>
               {applicants.map((a, idx) => (
                 <TableRow key={idx}>
@@ -398,11 +418,15 @@ th {
                     )?.program_code ?? "N/A"}
                   </TableCell>
                   <TableCell align="left" sx={{ border: "2px solid maroon" }}>
+                    {a.room_no || proctor?.room_no || "N/A"} {/* ✅ NEW */}
+                  </TableCell>
+                  <TableCell align="left" sx={{ border: "2px solid maroon" }}>
                     {a.email_sent ? "✅ Sent" : "❌ Not Sent"}
                   </TableCell>
                 </TableRow>
               ))}
             </TableBody>
+
           </Table>
         </TableContainer>
 

@@ -34,11 +34,10 @@ const tabs = [
     { label: "Applicant List", to: "/applicant_list", icon: <ListAltIcon /> },
     { label: "Applicant Form", to: "/admin_dashboard1", icon: <PersonIcon /> },
     { label: "Documents Submitted", to: "/student_requirements", icon: <DescriptionIcon /> },
-    { label: "Interview", to: "/interview", icon: <RecordVoiceOverIcon /> },
-    { label: "Qualifying Exam", to: "/qualifying_exam", icon: <SchoolIcon /> },
+    { label: "Interview / Qualifiying Exam", to: "/interview", icon: <SchoolIcon /> },
     { label: "College Approval", to: "/college_approval", icon: <CheckCircleIcon /> },
     { label: "Medical Clearance", to: "/medical_clearance", icon: <LocalHospitalIcon /> },
-    { label: "Applicant Status", to: "/applicant_status", icon: <HowToRegIcon /> },
+     { label: "Student Numbering", to: "/student_numbering", icon: <HowToRegIcon /> },
 
 ];
 
@@ -65,7 +64,7 @@ const Interview = () => {
 
 
 
-     const handleStepClick = (index, to) => {
+    const handleStepClick = (index, to) => {
         setActiveStep(index);
 
         const pid = sessionStorage.getItem("admin_edit_person_id");
@@ -458,72 +457,72 @@ const Interview = () => {
                 <br />
 
 
-           <Box
-  sx={{
-    display: "flex",
-    justifyContent: "space-between",
-    alignItems: "center",
-    width: "100%",
-    mt: 2,
-    flexWrap: "wrap", // so it wraps on smaller screens
-  }}
->
-  {tabs.map((tab, index) => (
-    <React.Fragment key={index}>
-      {/* Step Card */}
-      <Card
-        onClick={() => handleStepClick(index, tab.to)}
-        sx={{
-          flex: 1,
-          maxWidth: `${100 / tabs.length}%`, // evenly fit in one row
-          height: 100,
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "center",
-          cursor: "pointer",
-          borderRadius: 2,
-          border: "2px solid #6D2323",
+                <Box
+                    sx={{
+                        display: "flex",
+                        justifyContent: "space-between",
+                        alignItems: "center",
+                        width: "100%",
+                        mt: 2,
+                        flexWrap: "wrap", // so it wraps on smaller screens
+                    }}
+                >
+                    {tabs.map((tab, index) => (
+                        <React.Fragment key={index}>
+                            {/* Step Card */}
+                            <Card
+                                onClick={() => handleStepClick(index, tab.to)}
+                                sx={{
+                                    flex: 1,
+                                    maxWidth: `${100 / tabs.length}%`, // evenly fit in one row
+                                    height: 100,
+                                    display: "flex",
+                                    alignItems: "center",
+                                    justifyContent: "center",
+                                    cursor: "pointer",
+                                    borderRadius: 2,
+                                    border: "2px solid #6D2323",
 
-          backgroundColor: activeStep === index ? "#6D2323" : "#E8C999",
-          color: activeStep === index ? "#fff" : "#000",
-          boxShadow:
-            activeStep === index
-              ? "0px 4px 10px rgba(0,0,0,0.3)"
-              : "0px 2px 6px rgba(0,0,0,0.15)",
-          transition: "0.3s ease",
-          "&:hover": {
-            backgroundColor: activeStep === index ? "#5a1c1c" : "#f5d98f",
-          },
-        }}
-      >
-        <Box
-          sx={{
-            display: "flex",
-            flexDirection: "column",
-            alignItems: "center",
-          }}
-        >
-          <Box sx={{ fontSize: 32, mb: 0.5 }}>{tab.icon}</Box>
-          <Typography
-            sx={{ fontSize: 14, fontWeight: "bold", textAlign: "center" }}
-          >
-            {tab.label}
-          </Typography>
-        </Box>
-      </Card>
+                                    backgroundColor: activeStep === index ? "#6D2323" : "#E8C999",
+                                    color: activeStep === index ? "#fff" : "#000",
+                                    boxShadow:
+                                        activeStep === index
+                                            ? "0px 4px 10px rgba(0,0,0,0.3)"
+                                            : "0px 2px 6px rgba(0,0,0,0.15)",
+                                    transition: "0.3s ease",
+                                    "&:hover": {
+                                        backgroundColor: activeStep === index ? "#5a1c1c" : "#f5d98f",
+                                    },
+                                }}
+                            >
+                                <Box
+                                    sx={{
+                                        display: "flex",
+                                        flexDirection: "column",
+                                        alignItems: "center",
+                                    }}
+                                >
+                                    <Box sx={{ fontSize: 32, mb: 0.5 }}>{tab.icon}</Box>
+                                    <Typography
+                                        sx={{ fontSize: 14, fontWeight: "bold", textAlign: "center" }}
+                                    >
+                                        {tab.label}
+                                    </Typography>
+                                </Box>
+                            </Card>
 
-      {/* Spacer instead of line */}
-      {index < tabs.length - 1 && (
-        <Box
-          sx={{
-            flex: 0.1,
-            mx: 1, // keeps spacing between cards
-          }}
-        />
-      )}
-    </React.Fragment>
-  ))}
-</Box>
+                            {/* Spacer instead of line */}
+                            {index < tabs.length - 1 && (
+                                <Box
+                                    sx={{
+                                        flex: 0.1,
+                                        mx: 1, // keeps spacing between cards
+                                    }}
+                                />
+                            )}
+                        </React.Fragment>
+                    ))}
+                </Box>
 
                 <br />
                 {/* Applicant ID and Name */}
@@ -585,7 +584,7 @@ const Interview = () => {
                         <Box sx={{ flex: 1 }}>
                             <Box sx={{ display: "flex", gap: 2, mb: 2 }}>
                                 <Box sx={{ flex: 1 }}>
-                                    <Typography sx={{ mb: 1, fontWeight: "bold" }}>Entrance Exam Interviewer</Typography>
+                                    <Typography sx={{ mb: 1, fontWeight: "bold" }}>Proctor</Typography>
                                     <TextField
                                         fullWidth
                                         multiline
@@ -634,7 +633,7 @@ const Interview = () => {
                         {/* Scores */}
                         <Box sx={{ display: "flex", gap: 2, mb: 2 }}>
                             <Box sx={{ flex: 1 }}>
-                                <Typography sx={{ mb: 1, fontWeight: "bold" }}>Entrance Exam Score (0-100)</Typography>
+                                <Typography sx={{ mb: 1, fontWeight: "bold" }}>Qualifying Exam Score (0-100)</Typography>
                                 <TextField
                                     type="number"
                                     fullWidth
@@ -645,7 +644,7 @@ const Interview = () => {
                             </Box>
 
                             <Box sx={{ flex: 1 }}>
-                                <Typography sx={{ mb: 1, fontWeight: "bold" }}>College Exam Score (0-100)</Typography>
+                                <Typography sx={{ mb: 1, fontWeight: "bold" }}>Qualifying Interview Score (0-100)</Typography>
                                 <TextField
                                     type="number"
                                     fullWidth

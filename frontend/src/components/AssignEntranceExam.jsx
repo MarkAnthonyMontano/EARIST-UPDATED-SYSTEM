@@ -2,16 +2,7 @@ import React, { useState, useEffect } from "react";
 import axios from "axios";
 import { Box, Button, Grid, MenuItem, TextField, Typography, Paper } from "@mui/material";
 import { Link, useLocation } from "react-router-dom";
-import PersonIcon from "@mui/icons-material/Person";
-import DescriptionIcon from "@mui/icons-material/Description";
-import AssignmentIcon from "@mui/icons-material/Assignment";
-import RecordVoiceOverIcon from "@mui/icons-material/RecordVoiceOver";
-import SchoolIcon from "@mui/icons-material/School";
-import CheckCircleIcon from "@mui/icons-material/CheckCircle";
-import LocalHospitalIcon from "@mui/icons-material/LocalHospital";
-import HowToRegIcon from "@mui/icons-material/HowToReg";
-import ListAltIcon from "@mui/icons-material/ListAlt";
-import { Stepper, Step, StepLabel } from "@mui/material";
+
 import { useNavigate } from "react-router-dom";
 
 const AssignEntranceExam = () => {
@@ -19,10 +10,10 @@ const AssignEntranceExam = () => {
     { label: "Room Scheduling", to: "/assign_entrance_exam" },
     { label: "Applicant's Scheduling", to: "/assign_schedule_applicant" },
     { label: "Examination Profile", to: "/examination_profile" },
-    { label: "Applicant's Score", to: "/applicant_scoring" },
+    { label: "Entrance Examation Scores", to: "/applicant_scoring" },
+    { label: "Qualifying Examination Scores", to: "/qualifying_exam_scores" },
     { label: "Proctor's Applicant List", to: "/proctor_applicant_list" },
   ];
-
 
 
   const navigate = useNavigate();
@@ -162,36 +153,43 @@ const AssignEntranceExam = () => {
       <br />
 
 
-      <Box display="flex" sx={{ border: "2px solid maroon", borderRadius: "4px", overflow: "hidden" }}>
-        {tabs.map((tab, index) => (
-          <Link
-            key={index}
-            to={tab.to}
-            style={{ textDecoration: "none", flex: 1 }}
-          >
-            <Box
-              sx={{
-                backgroundColor: "#6D2323",
-                padding: "16px",
-                color: "#ffffff",
-                textAlign: "center",
-                cursor: "pointer",
-                borderRight: index !== tabs.length - 1 ? "2px solid white" : "none", // changed here
-                transition: "all 0.3s ease",
-                "&:hover": {
-                  backgroundColor: "#f9f9f9",
-                  color: "#6D2323", // font color on hover
-                },
-              }}
-            >
-              <Typography sx={{ color: "inherit", fontWeight: "bold", wordBreak: "break-word" }}>
-                {tab.label}
-              </Typography>
-            </Box>
-          </Link>
-        ))}
-      </Box>
+     <Box display="flex" sx={{ border: "2px solid maroon", borderRadius: "4px", overflow: "hidden" }}>
+  {tabs.map((tab, index) => {
+    const isActive = location.pathname === tab.to;
 
+    return (
+      <Link
+        key={index}
+        to={tab.to}
+        style={{ textDecoration: "none", flex: 1 }}
+      >
+        <Box
+          sx={{
+            backgroundColor: isActive ? "#6D2323" : "#E8C999",  // ✅ active vs default
+            padding: "16px",
+            color: isActive ? "#ffffff" : "#000000",            // ✅ text color contrast
+            textAlign: "center",
+            height: "75px",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            cursor: "pointer",
+            borderRight: index !== tabs.length - 1 ? "2px solid white" : "none",
+            transition: "all 0.3s ease",
+            "&:hover": {
+              backgroundColor: isActive ? "#6D2323" : "#f9f9f9",
+              color: isActive ? "#ffffff" : "#6D2323",
+            },
+          }}
+        >
+          <Typography sx={{ color: "inherit", fontWeight: "bold", wordBreak: "break-word" }}>
+            {tab.label}
+          </Typography>
+        </Box>
+      </Link>
+    );
+  })}
+</Box>
 
       <Box
         display="flex"

@@ -56,8 +56,7 @@ const ApplicantList = () => {
         { label: "Applicant Form", to: "/admin_dashboard1", icon: <PersonIcon /> },
         { label: "Documents Submitted", to: "/student_requirements", icon: <DescriptionIcon /> },
         { label: "Admission Exam", to: "/assign_entrance_exam", icon: <AssignmentIcon /> },
-        { label: "Interview", to: "/interview", icon: <RecordVoiceOverIcon /> },
-        { label: "Qualifying Exam", to: "/qualifying_exam", icon: <SchoolIcon /> },
+        { label: "Interview / Qualifiying Exam", to: "/interview", icon: <RecordVoiceOverIcon /> },
         { label: "College Approval", to: "/college_approval", icon: <CheckCircleIcon /> },
         { label: "Medical Clearance", to: "/medical_clearance", icon: <LocalHospitalIcon /> },
         { label: "Applicant Status", to: "/applicant_status", icon: <HowToRegIcon /> },
@@ -475,11 +474,18 @@ const ApplicantList = () => {
     const divToPrintRef = useRef();
 
 
+const printDiv = () => {
+  // Pick address based on selected campus
+  let campusAddress = "";
+  if (person?.campus === "0") {
+    campusAddress = "Nagtahan St. Sampaloc, Manila";
+  } else if (person?.campus === "1") {
+    campusAddress = "Blk. 3 Lot 2, 5 Congressional Rd, General Mariano Alvarez";
+  }
 
-    const printDiv = () => {
-        const newWin = window.open("", "Print-Window");
-        newWin.document.open();
-        newWin.document.write(`
+  const newWin = window.open("", "Print-Window");
+  newWin.document.open();
+  newWin.document.write(`
     <html>
       <head>
         <title>Applicant List</title>
@@ -536,10 +542,10 @@ const ApplicantList = () => {
         <div class="print-container">
 
           <!-- Header -->
-         <div class="print-header">
-  <img src="${EaristLogo}" alt="Earist Logo" 
-       style="width: 125px; height: 125px;" />
-  <div>
+          <div class="print-header">
+            <img src="${EaristLogo}" alt="Earist Logo" 
+                 style="width: 125px; height: 125px;" />
+            <div>
               <div>Republic of the Philippines</div>
               <b style="letter-spacing: 1px; font-size: 20px;">
                 Eulogio "Amang" Rodriguez
@@ -547,7 +553,7 @@ const ApplicantList = () => {
               <div style="letter-spacing: 1px; font-size: 20px;">
                 <b>Institute of Science and Technology</b>
               </div>
-              <div>Nagtahan St. Sampaloc, Manila</div>
+              <div>${campusAddress}</div>
               <div style="margin-top: 30px;">
                 <b style="font-size: 24px; letter-spacing: 1px;">
                   Applicant List
@@ -568,35 +574,33 @@ const ApplicantList = () => {
                 <th>Status</th>
               </tr>
             </thead>
-        <tbody>
-  ${filteredPersons.map(person => `
-    <tr>
-      <td>${person.applicant_number ?? "N/A"}</td>
-      <td>${person.last_name}, ${person.first_name} ${person.middle_name ?? ""} ${person.extension ?? ""}</td>
-      <td>${curriculumOptions.find(
-            item => item.curriculum_id?.toString() === person.program?.toString()
-        )?.program_code ?? "N/A"}</td>
-      <td>${person.generalAverage1 ?? ""}</td>
-      <td>${new Date(person.created_at).toLocaleDateString("en-PH")}</td>
-      <td>${person.registrar_status === 1
-                ? "Submitted"
-                : person.registrar_status === 0
-                    ? "Unsubmitted / Incomplete"
-                    : ""
-            }</td>
-    </tr>
-  `).join("")}
-</tbody>
-
+            <tbody>
+              ${filteredPersons.map(person => `
+                <tr>
+                  <td>${person.applicant_number ?? "N/A"}</td>
+                  <td>${person.last_name}, ${person.first_name} ${person.middle_name ?? ""} ${person.extension ?? ""}</td>
+                  <td>${curriculumOptions.find(
+                    item => item.curriculum_id?.toString() === person.program?.toString()
+                  )?.program_code ?? "N/A"}</td>
+                  <td>${person.generalAverage1 ?? ""}</td>
+                  <td>${new Date(person.created_at).toLocaleDateString("en-PH")}</td>
+                  <td>${person.registrar_status === 1
+                        ? "Submitted"
+                        : person.registrar_status === 0
+                          ? "Unsubmitted / Incomplete"
+                          : ""
+                      }</td>
+                </tr>
+              `).join("")}
+            </tbody>
           </table>
 
         </div>
       </body>
     </html>
   `);
-        newWin.document.close();
-    };
-
+  newWin.document.close();
+};
 
 
     return (

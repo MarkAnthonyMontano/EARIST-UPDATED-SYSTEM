@@ -43,6 +43,9 @@ const Dashboard3 = (props) => {
     const storedUser = localStorage.getItem("email");
     const storedRole = localStorage.getItem("role");
     const storedID = localStorage.getItem("person_id");
+    const keys = JSON.parse(localStorage.getItem("dashboardKeys") || "{}");
+    navigate(`/dashboard/${keys.step3}`);
+
 
     const overrideId = props?.adminOverridePersonId; // new
 
@@ -119,15 +122,16 @@ const Dashboard3 = (props) => {
 
 
 
+const keys = JSON.parse(localStorage.getItem("dashboardKeys") || "{}");
 
+const steps = [
+  { label: "Personal Information", icon: <PersonIcon />, path: `/dashboard/${keys.step1}` },
+  { label: "Family Background", icon: <FamilyRestroomIcon />, path: `/dashboard/${keys.step2}` },
+  { label: "Educational Attainment", icon: <SchoolIcon />, path: `/dashboard/${keys.step3}` },
+  { label: "Health Medical Records", icon: <HealthAndSafetyIcon />, path: `/dashboard/${keys.step4}` },
+  { label: "Other Information", icon: <InfoIcon />, path: `/dashboard/${keys.step5}` },
+];
 
-  const steps = [
-    { label: "Personal Information", icon: <PersonIcon />, path: "/dashboard1" },
-    { label: "Family Background", icon: <FamilyRestroomIcon />, path: "/dashboard2" },
-    { label: "Educational Attainment", icon: <SchoolIcon />, path: "/dashboard3" },
-    { label: "Health Medical Records", icon: <HealthAndSafetyIcon />, path: "/dashboard4" },
-    { label: "Other Information", icon: <InfoIcon />, path: "/dashboard5" },
-  ];
 
 
   const [activeStep, setActiveStep] = useState(2);
@@ -176,7 +180,7 @@ const Dashboard3 = (props) => {
   };
 
 
-  
+
   const links = [
     { to: "/ecat_application_form", label: "ECAT Application Form" },
     { to: "/admission_form_process", label: "Admission Form Process" },
@@ -187,7 +191,7 @@ const Dashboard3 = (props) => {
   ];
 
 
-   // 🔒 Disable right-click
+  // 🔒 Disable right-click
   document.addEventListener('contextmenu', (e) => e.preventDefault());
 
   // 🔒 Block DevTools shortcuts silently
@@ -203,7 +207,7 @@ const Dashboard3 = (props) => {
       e.stopPropagation();
     }
   });
-  
+
 
   return (
     <Box sx={{ height: "calc(100vh - 150px)", overflowY: "auto", paddingRight: 1, backgroundColor: "transparent" }}>
@@ -319,7 +323,7 @@ const Dashboard3 = (props) => {
         ))}
       </Box>
       <Container>
-        
+
         <Container>
           <h1 style={{ fontSize: "50px", fontWeight: "bold", textAlign: "center", color: "maroon", marginTop: "25px" }}>APPLICANT FORM</h1>
           <div style={{ textAlign: "center" }}>Complete the applicant form to secure your place for the upcoming academic year at EARIST.</div>
@@ -780,70 +784,70 @@ const Dashboard3 = (props) => {
 
 
 
-            <Box display="flex" justifyContent="space-between" mt={4}>
-              {/* Previous Page Button */}
-              <Button
-                variant="contained"
-                component={Link}
-                to="/dashboard2"
-                startIcon={
-                  <ArrowBackIcon
-                    sx={{
-                      color: '#000',
-                      transition: 'color 0.3s',
-                    }}
-                  />
-                }
-                sx={{
-                  backgroundColor: '#E8C999',
-                  color: '#000',
-                  '&:hover': {
-                    backgroundColor: '#6D2323',
-                    color: '#fff',
-                    '& .MuiSvgIcon-root': {
-                      color: '#fff',
-                    },
-                  },
-                }}
-              >
-                Previous Step
-              </Button>
+         <Box display="flex" justifyContent="space-between" mt={4}>
+  {/* Previous Page Button */}
+  <Button
+    variant="contained"
+    onClick={() => navigate(`/dashboard/${keys.step2}`)} // ✅ FIXED
+    startIcon={
+      <ArrowBackIcon
+        sx={{
+          color: "#000",
+          transition: "color 0.3s",
+        }}
+      />
+    }
+    sx={{
+      backgroundColor: "#E8C999",
+      color: "#000",
+      "&:hover": {
+        backgroundColor: "#6D2323",
+        color: "#fff",
+        "& .MuiSvgIcon-root": {
+          color: "#fff",
+        },
+      },
+    }}
+  >
+    Previous Step
+  </Button>
 
-              {/* Next Step Button */}
-              <Button
-                variant="contained"
-                onClick={(e) => {
-                  handleUpdate();
+  {/* Next Step Button */}
+  <Button
+    variant="contained"
+    onClick={() => {
+      handleUpdate();
 
-                  if (isFormValid()) {
-                    navigate("/dashboard4");
-                  } else {
-                    alert("Please complete all required fields before proceeding.");
-                  }
-                }}
-                endIcon={
-                  <ArrowForwardIcon
-                    sx={{
-                      color: '#fff',
-                      transition: 'color 0.3s',
-                    }}
-                  />
-                }
-                sx={{
-                  backgroundColor: '#6D2323',
-                  color: '#fff',
-                  '&:hover': {
-                    backgroundColor: '#E8C999',
-                    color: '#000',
-                    '& .MuiSvgIcon-root': {
-                      color: '#000',
-                    },
-                  },
-                }}
-              >
-                Next Step
-              </Button>
-            </Box>
+      if (isFormValid()) {
+        navigate(`/dashboard/${keys.step4}`); // ✅ Goes to step4
+      } else {
+        alert("Please complete all required fields before proceeding.");
+      }
+    }}
+    endIcon={
+      <ArrowForwardIcon
+        sx={{
+          color: "#fff",
+          transition: "color 0.3s",
+        }}
+      />
+    }
+    sx={{
+      backgroundColor: "#6D2323",
+      color: "#fff",
+      "&:hover": {
+        backgroundColor: "#E8C999",
+        color: "#000",
+        "& .MuiSvgIcon-root": {
+          color: "#000",
+        },
+      },
+    }}
+  >
+    Next Step
+  </Button>
+</Box>
+
 
 
 

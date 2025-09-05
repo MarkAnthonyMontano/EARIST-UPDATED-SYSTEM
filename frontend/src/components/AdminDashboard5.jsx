@@ -1,6 +1,6 @@
 import React, { useState, useEffect, } from "react";
 import axios from "axios";
-import { Button, Box, Container, Typography, Checkbox, FormControl, Card, FormControlLabel, FormHelperText } from "@mui/material";
+import { Button, Box, TextField, Container, Card, TableContainer, Paper, Table, TableHead, TableRow, TableCell, Typography, FormControl, FormHelperText, InputLabel, Select, MenuItem, Checkbox, FormControlLabel } from "@mui/material";
 import { Link } from "react-router-dom";
 import PersonIcon from "@mui/icons-material/Person";
 import FamilyRestroomIcon from "@mui/icons-material/FamilyRestroom";
@@ -13,11 +13,54 @@ import ErrorIcon from '@mui/icons-material/Error';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { motion } from "framer-motion";
 import PictureAsPdfIcon from "@mui/icons-material/PictureAsPdf";
+import CheckCircleIcon from "@mui/icons-material/CheckCircle";
+import LocalHospitalIcon from "@mui/icons-material/LocalHospital";
+import HowToRegIcon from "@mui/icons-material/HowToReg";
+import ListAltIcon from "@mui/icons-material/ListAlt";
+import DescriptionIcon from "@mui/icons-material/Description";
 
 
 
 const AdminDashboard5 = () => {
+  const stepsData = [
+    { label: "Applicant List", to: "/applicant_list", icon: <ListAltIcon /> },
+    { label: "Applicant Form", to: "/admin_dashboard1", icon: <PersonIcon /> },
+    { label: "Documents Submitted", to: "/student_requirements", icon: <DescriptionIcon /> },
+    { label: "Interview / Qualifiying Exam", to: "/interview", icon: <SchoolIcon /> },
+    { label: "College Approval", to: "/college_approval", icon: <CheckCircleIcon /> },
+    { label: "Medical Clearance", to: "/medical_clearance", icon: <LocalHospitalIcon /> },
+       { label: "Student Numbering", to: "/student_numbering", icon: <HowToRegIcon /> },
+  ];
+  const [currentStep, setCurrentStep] = useState(1);
+  const [visitedSteps, setVisitedSteps] = useState(Array(stepsData.length).fill(false));
+
+  const fetchByPersonId = async (personID) => {
+    try {
+      const res = await axios.get(`http://localhost:5000/api/person_with_applicant/${personID}`);
+      setPerson(res.data);
+      setSelectedPerson(res.data);
+      if (res.data?.applicant_number) {
+      }
+    } catch (err) {
+      console.error("❌ person_with_applicant failed:", err);
+    }
+  };
+
+  const handleNavigateStep = (index, to) => {
+    setCurrentStep(index);
+
+    const pid = sessionStorage.getItem("admin_edit_person_id");
+    if (pid) {
+      navigate(`${to}?person_id=${pid}`);
+    } else {
+      navigate(to);
+    }
+  };
+
+
   const navigate = useNavigate();
+  const [explicitSelection, setExplicitSelection] = useState(false);
+
   const [userID, setUserID] = useState("");
   const [user, setUser] = useState("");
   const [userRole, setUserRole] = useState("");
@@ -63,6 +106,39 @@ const AdminDashboard5 = () => {
     window.location.href = "/login";
   }, [queryPersonId]);
 
+  useEffect(() => {
+    let consumedFlag = false;
+
+    const tryLoad = async () => {
+      if (queryPersonId) {
+        await fetchByPersonId(queryPersonId);
+        setExplicitSelection(true);
+        consumedFlag = true;
+        return;
+      }
+
+      // fallback only if it's a fresh selection from Applicant List
+      const source = sessionStorage.getItem("admin_edit_person_id_source");
+      const tsStr = sessionStorage.getItem("admin_edit_person_id_ts");
+      const id = sessionStorage.getItem("admin_edit_person_id");
+      const ts = tsStr ? parseInt(tsStr, 10) : 0;
+      const isFresh = source === "applicant_list" && Date.now() - ts < 5 * 60 * 1000;
+
+      if (id && isFresh) {
+        await fetchByPersonId(id);
+        setExplicitSelection(true);
+        consumedFlag = true;
+      }
+    };
+
+    tryLoad().finally(() => {
+      // consume the freshness so it won't auto-load again later
+      if (consumedFlag) {
+        sessionStorage.removeItem("admin_edit_person_id_source");
+        sessionStorage.removeItem("admin_edit_person_id_ts");
+      }
+    });
+  }, [queryPersonId]);
 
 
 
@@ -154,22 +230,6 @@ const AdminDashboard5 = () => {
   ];
 
 
-  // 🔒 Disable right-click
-  document.addEventListener('contextmenu', (e) => e.preventDefault());
-
-  // 🔒 Block DevTools shortcuts silently
-  document.addEventListener('keydown', (e) => {
-    const isBlockedKey =
-      e.key === 'F12' ||
-      e.key === 'F11' ||
-      (e.ctrlKey && e.shiftKey && (e.key === 'I' || e.key === 'J')) ||
-      (e.ctrlKey && e.key === 'U');
-
-    if (isBlockedKey) {
-      e.preventDefault();
-      e.stopPropagation();
-    }
-  });
 
 
   // dot not alter
@@ -195,11 +255,112 @@ const AdminDashboard5 = () => {
             fontSize: '36px',
           }}
         >
-         ADMISSION SHIFTING FORM
+          ADMISSION SHIFTING FORM
         </Typography>
       </Box>
       <hr style={{ border: "1px solid #ccc", width: "100%" }} />
       <br />
+
+      <Box
+        sx={{
+          display: "flex",
+          justifyContent: "space-between",
+          alignItems: "center",
+          width: "100%",
+          mt: 2,
+        }}
+      >
+        {stepsData.map((step, index) => (
+          <React.Fragment key={index}>
+            {/* Step Card */}
+            <Card
+              onClick={() => handleNavigateStep(index, step.to)}
+              sx={{
+                flex: 1,
+                maxWidth: `${100 / stepsData.length}%`, // evenly fit 100%
+                height: 100,
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                cursor: "pointer",
+                borderRadius: 2,
+                border: "2px solid #6D2323",
+
+                backgroundColor: currentStep === index ? "#6D2323" : "#E8C999",
+                color: currentStep === index ? "#fff" : "#000",
+                boxShadow:
+                  currentStep === index
+                    ? "0px 4px 10px rgba(0,0,0,0.3)"
+                    : "0px 2px 6px rgba(0,0,0,0.15)",
+                transition: "0.3s ease",
+                "&:hover": {
+                  backgroundColor: currentStep === index ? "#5a1c1c" : "#f5d98f",
+                },
+              }}
+            >
+              <Box
+                sx={{
+                  display: "flex",
+                  flexDirection: "column",
+                  alignItems: "center",
+                }}
+              >
+                <Box sx={{ fontSize: 32, mb: 0.5 }}>{step.icon}</Box>
+                <Typography
+                  sx={{ fontSize: 14, fontWeight: "bold", textAlign: "center" }}
+                >
+                  {step.label}
+                </Typography>
+              </Box>
+            </Card>
+
+            {/* Spacer instead of line */}
+            {index < stepsData.length - 1 && (
+              <Box
+                sx={{
+                  flex: 0.1,
+                  mx: 1, // margin to keep spacing
+                }}
+              />
+            )}
+          </React.Fragment>
+        ))}
+      </Box>
+
+      <br />
+
+
+
+      <TableContainer component={Paper} sx={{ width: '100%', mb: 1 }}>
+        <Table>
+          <TableHead sx={{ backgroundColor: '#6D2323' }}>
+            <TableRow>
+              {/* Left cell: Applicant ID */}
+              <TableCell sx={{ color: 'white', fontSize: '20px', fontFamily: 'Arial Black', border: 'none' }}>
+                Applicant ID:&nbsp;
+                <span style={{ fontFamily: "Arial", fontWeight: "normal", textDecoration: "underline" }}>
+                  {person?.applicant_number || "N/A"}
+
+                </span>
+              </TableCell>
+
+              {/* Right cell: Applicant Name */}
+              <TableCell
+                align="right"
+                sx={{ color: 'white', fontSize: '20px', fontFamily: 'Arial Black', border: 'none' }}
+              >
+                Applicant Name:&nbsp;
+                <span style={{ fontFamily: "Arial", fontWeight: "normal", textDecoration: "underline" }}>
+                  {person?.last_name?.toUpperCase()}, {person?.first_name?.toUpperCase()}{" "}
+                  {person?.middle_name?.toUpperCase()} {person?.extension?.toUpperCase() || ""}
+                </span>
+              </TableCell>
+            </TableRow>
+          </TableHead>
+        </Table>
+      </TableContainer>
+
+
 
       <Box sx={{ display: "flex", width: "100%" }}>
         {/* Left side: Notice */}

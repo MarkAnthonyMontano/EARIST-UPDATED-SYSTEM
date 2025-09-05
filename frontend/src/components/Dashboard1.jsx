@@ -78,6 +78,9 @@ const Dashboard1 = (props) => {
     const storedUser = localStorage.getItem("email");
     const storedRole = localStorage.getItem("role");
     const storedID = localStorage.getItem("person_id");
+    const keys = JSON.parse(localStorage.getItem("dashboardKeys") || "{}");
+    navigate(`/dashboard/${keys.step1}`);
+
 
     const overrideId = props?.adminOverridePersonId; // new
 
@@ -106,12 +109,15 @@ const Dashboard1 = (props) => {
 
 
 
+  const keys = JSON.parse(localStorage.getItem("dashboardKeys") || "{}");
+
   const steps = [
-    { label: "Personal Information", icon: <PersonIcon />, path: "/dashboard1" },
-    { label: "Family Background", icon: <FamilyRestroomIcon />, path: "/dashboard2" },
-    { label: "Educational Attainment", icon: <SchoolIcon />, path: "/dashboard3" },
-    { label: "Health Medical Records", icon: <HealthAndSafetyIcon />, path: "/dashboard4" },
-    { label: "Other Information", icon: <InfoIcon />, path: "/dashboard5" },
+    { label: "Personal Information", icon: <PersonIcon />, path: `/dashboard/${keys.step1}` },
+    { label: "Family Background", icon: <FamilyRestroomIcon />, path: `/dashboard/${keys.step2}` },
+    { label: "Educational Attainment", icon: <SchoolIcon />, path: `/dashboard/${keys.step3}` },
+    { label: "Health Medical Records", icon: <HealthAndSafetyIcon />, path: `/dashboard/${keys.step4}` },
+    { label: "Other Information", icon: <InfoIcon />, path: `/dashboard/${keys.step5}` },
+    
   ];
 
 
@@ -564,7 +570,7 @@ const Dashboard1 = (props) => {
             }}
           >
             <strong style={{ color: "maroon" }}>Notice:</strong> &nbsp;
-         
+
             <strong>1.</strong> Kindly type <strong>'NA'</strong> in boxes where there are no possible answers to the information being requested. &nbsp; | &nbsp;
             <strong>2.</strong> To use the letter <strong>'Ñ'</strong>, press <kbd>ALT</kbd> + <kbd>165</kbd>; for <strong>'ñ'</strong>, press <kbd>ALT</kbd> + <kbd>164</kbd>. &nbsp; | &nbsp;
             <strong>3.</strong> List of all printable files
@@ -2347,7 +2353,8 @@ const Dashboard1 = (props) => {
                   handleUpdate();
 
                   if (isFormValid()) {
-                    navigate("/dashboard2");
+                    navigate(`/dashboard/${keys.step2}`);
+
                   } else {
                     alert("Please complete all required fields before proceeding.");
                   }

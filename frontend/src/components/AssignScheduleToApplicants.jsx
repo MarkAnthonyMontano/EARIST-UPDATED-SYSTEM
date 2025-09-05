@@ -27,15 +27,7 @@ import {
 } from "@mui/material";
 import { Search } from '@mui/icons-material';
 import { Link, useLocation, useNavigate } from "react-router-dom";
-import PersonIcon from "@mui/icons-material/Person";
-import DescriptionIcon from "@mui/icons-material/Description";
-import AssignmentIcon from "@mui/icons-material/Assignment";
-import RecordVoiceOverIcon from "@mui/icons-material/RecordVoiceOver";
-import SchoolIcon from "@mui/icons-material/School";
-import CheckCircleIcon from "@mui/icons-material/CheckCircle";
-import LocalHospitalIcon from "@mui/icons-material/LocalHospital";
-import HowToRegIcon from "@mui/icons-material/HowToReg";
-import ListAltIcon from "@mui/icons-material/ListAlt";
+
 
 const socket = io("http://localhost:5000");
 
@@ -45,10 +37,10 @@ const AssignScheduleToApplicants = () => {
     { label: "Room Scheduling", to: "/assign_entrance_exam" },
     { label: "Applicant's Scheduling", to: "/assign_schedule_applicant" },
     { label: "Examination Profile", to: "/examination_profile" },
-    { label: "Applicant's Score", to: "/applicant_scoring" },
-    { label: "Proctor's Applicant List", to: "/proctor_applicant_list" },  
+    { label: "Entrance Examation Scores", to: "/applicant_scoring" },
+    { label: "Qualifying Examination Scores", to: "/qualifying_exam_scores" },
+    { label: "Proctor's Applicant List", to: "/proctor_applicant_list" },
   ];
-
 
 
 
@@ -108,6 +100,48 @@ const AssignScheduleToApplicants = () => {
 
 
   const [allCurriculums, setAllCurriculums] = useState([]);
+  const [schoolYears, setSchoolYears] = useState([]);
+  const [semesters, setSchoolSemester] = useState([]);
+  const [selectedSchoolYear, setSelectedSchoolYear] = useState("");
+  const [selectedSchoolSemester, setSelectedSchoolSemester] = useState('');
+  const [selectedActiveSchoolYear, setSelectedActiveSchoolYear] = useState('');
+
+  useEffect(() => {
+    axios
+      .get(`http://localhost:5000/get_school_year/`)
+      .then((res) => setSchoolYears(res.data))
+      .catch((err) => console.error(err));
+  }, [])
+
+  useEffect(() => {
+    axios
+      .get(`http://localhost:5000/get_school_semester/`)
+      .then((res) => setSchoolSemester(res.data))
+      .catch((err) => console.error(err));
+  }, [])
+
+  useEffect(() => {
+
+    axios
+      .get(`http://localhost:5000/active_school_year`)
+      .then((res) => {
+        if (res.data.length > 0) {
+          setSelectedSchoolYear(res.data[0].year_id);
+          setSelectedSchoolSemester(res.data[0].semester_id);
+        }
+      })
+      .catch((err) => console.error(err));
+
+  }, []);
+
+  const handleSchoolYearChange = (event) => {
+    setSelectedSchoolYear(event.target.value);
+  };
+
+  const handleSchoolSemesterChange = (event) => {
+    setSelectedSchoolSemester(event.target.value);
+  };
+
   const [snack, setSnack] = useState({ open: false, message: "", severity: "info" });
 
   const handleCloseSnack = (_, reason) => {
@@ -625,33 +659,41 @@ const AssignScheduleToApplicants = () => {
 
       <br />
       <Box display="flex" sx={{ border: "2px solid maroon", borderRadius: "4px", overflow: "hidden" }}>
-        {tabs.map((tab, index) => (
-          <Link
-            key={index}
-            to={tab.to}
-            style={{ textDecoration: "none", flex: 1 }}
-          >
-            <Box
-              sx={{
-                backgroundColor: "#6D2323",
-                padding: "16px",
-                color: "#ffffff",
-                textAlign: "center",
-                cursor: "pointer",
-                borderRight: index !== tabs.length - 1 ? "2px solid white" : "none", // changed here
-                transition: "all 0.3s ease",
-                "&:hover": {
-                  backgroundColor: "#f9f9f9",
-                  color: "#6D2323", // font color on hover
-                },
-              }}
+        {tabs.map((tab, index) => {
+          const isActive = location.pathname === tab.to;
+
+          return (
+            <Link
+              key={index}
+              to={tab.to}
+              style={{ textDecoration: "none", flex: 1 }}
             >
-              <Typography sx={{ color: "inherit", fontWeight: "bold", wordBreak: "break-word" }}>
-                {tab.label}
-              </Typography>
-            </Box>
-          </Link>
-        ))}
+              <Box
+                sx={{
+                  backgroundColor: isActive ? "#6D2323" : "#E8C999",  // ✅ active vs default
+                  padding: "16px",
+                  color: isActive ? "#ffffff" : "#000000",            // ✅ text color contrast
+                  textAlign: "center",
+                  height: "75px",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  cursor: "pointer",
+                  borderRight: index !== tabs.length - 1 ? "2px solid white" : "none",
+                  transition: "all 0.3s ease",
+                  "&:hover": {
+                    backgroundColor: isActive ? "#6D2323" : "#f9f9f9",
+                    color: isActive ? "#ffffff" : "#6D2323",
+                  },
+                }}
+              >
+                <Typography sx={{ color: "inherit", fontWeight: "bold", wordBreak: "break-word" }}>
+                  {tab.label}
+                </Typography>
+              </Box>
+            </Link>
+          );
+        })}
       </Box>
 
 
@@ -887,12 +929,12 @@ const AssignScheduleToApplicants = () => {
 
         </Box>
 
-        {/* === ROW 2: Department + Program === */}
-        <Box display="flex" alignItems="center" gap={3} mb={2}>
+        {/* === Filters Row: Department + Program + School Year + Semester === */}
+        <Box display="flex" alignItems="center" gap={3} mb={2} flexWrap="wrap">
           {/* Department Filter */}
           <Box display="flex" alignItems="center" gap={1}>
-            <Typography fontSize={13} sx={{ minWidth: "100px" }}>Department:</Typography>
-            <FormControl size="small" sx={{ width: "350px" }}>
+            <Typography fontSize={13} sx={{ minWidth: "70px" }}>Department:</Typography>
+            <FormControl size="small" sx={{ width: "250px" }}>
               <Select
                 value={selectedDepartmentFilter}
                 onChange={(e) => {
@@ -914,8 +956,8 @@ const AssignScheduleToApplicants = () => {
 
           {/* Program Filter */}
           <Box display="flex" alignItems="center" gap={1}>
-            <Typography fontSize={13} sx={{ minWidth: "100px" }}>Program:</Typography>
-            <FormControl size="small" sx={{ width: "350px" }}>
+            <Typography fontSize={13} sx={{ minWidth: "60px" }}>Program:</Typography>
+            <FormControl size="small" sx={{ width: "250px" }}>
               <Select
                 value={selectedProgramFilter}
                 onChange={(e) => setSelectedProgramFilter(e.target.value)}
@@ -930,7 +972,53 @@ const AssignScheduleToApplicants = () => {
               </Select>
             </FormControl>
           </Box>
+
+          {/* School Year Filter */}
+          <Box display="flex" alignItems="center" gap={1}>
+            <Typography fontSize={13} sx={{ minWidth: "80px" }}>School Year:</Typography>
+            <FormControl size="small" sx={{ width: "180px" }}>
+              <Select
+                value={selectedSchoolYear}
+                onChange={handleSchoolYearChange}
+                displayEmpty
+              >
+                {schoolYears.length > 0 ? (
+                  schoolYears.map((sy) => (
+                    <MenuItem value={sy.year_id} key={sy.year_id}>
+                      {sy.current_year} - {sy.next_year}
+                    </MenuItem>
+                  ))
+                ) : (
+                  <MenuItem disabled>School Year is not found</MenuItem>
+                )}
+              </Select>
+            </FormControl>
+          </Box>
+
+          {/* Semester Filter */}
+          <Box display="flex" alignItems="center" gap={1}>
+            <Typography fontSize={13} sx={{ minWidth: "70px" }}>Semester:</Typography>
+            <FormControl size="small" sx={{ width: "180px" }}>
+              <Select
+                value={selectedSchoolSemester}
+                onChange={handleSchoolSemesterChange}
+                displayEmpty
+              >
+                {semesters.length > 0 ? (
+                  semesters.map((sem) => (
+                    <MenuItem value={sem.semester_id} key={sem.semester_id}>
+                      {sem.semester_description}
+                    </MenuItem>
+                  ))
+                ) : (
+                  <MenuItem disabled>School Semester is not found</MenuItem>
+                )}
+              </Select>
+            </FormControl>
+          </Box>
         </Box>
+
+
 
 
       </Paper>
